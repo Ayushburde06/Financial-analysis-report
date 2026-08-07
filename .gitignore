@@ -1,0 +1,35 @@
+# Secrets — NEVER commit
+.env
+.env.*
+!.env.example
+*.key
+credentials.json
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.venv/
+.venv*/
+venv/
+*.egg-info/
+.pytest_cache/
+
+# Temporary directories, caches and database
+tmp/
+_check_imgs/
+chroma_db/
+uploads/
+batch_outputs/
+outputs/
+*.log
+pipeline/_debug_report.html
+
+# OS
+Thumbs.db
+.DS_Store
+
+# IDE
+.vscode/
+.idea/

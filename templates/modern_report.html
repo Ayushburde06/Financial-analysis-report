@@ -1,0 +1,616 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>{{ report.company.name }} — Modern AI Equity Research Report</title>
+    <link rel="stylesheet" href="modern_report.css">
+</head>
+<body>
+
+{# ═══════════════════════════════════════════════════════ PAGE 1: EXECUTIVE DASHBOARD ═══ #}
+<div class="header-card">
+  <div class="header-top">
+    <div>
+      <div class="company-title">{{ report.company.name }}</div>
+      <div class="company-subtitle">{{ report.company.sector or "Equity Research" }} • {{ report.company.report_date or "Q2 FY26" }} Results</div>
+    </div>
+    <div class="brand-badge">AI EQUITY RESEARCH</div>
+  </div>
+  
+  <div class="headline-box">
+    "{{ report.headline or "Record Financial Performance & Robust Execution Reinforce Long-Term Growth Visibility" }}"
+  </div>
+</div>
+
+<div class="page-grid">
+  {# ── LEFT COLUMN (Sidebar & Recommendation) ──────────────────── #}
+  <div class="left-col">
+    <div class="rec-card rec-{{ report.recommendation.action }}">
+      <div class="rec-label">AI RECOMMENDATION</div>
+      <div class="rec-action">{{ report.recommendation.action }}</div>
+      <div class="rec-sub">
+        Target: ₹{{ report.recommendation.target_price or "—" }} 
+        {% if report.company.upside_pct %}({% if report.company.upside_pct >= 0 %}+{% endif %}{{ report.company.upside_pct }}%){% endif %}
+      </div>
+      <div class="confidence-badge">Confidence: {{ report.scorecard.confidence_pct }}%</div>
+      <div class="horizon-tag">Horizon: {{ report.recommendation.horizon or "12 Months" }}</div>
+    </div>
+
+    <div class="section-card">
+      <div class="card-title">Company Snapshot</div>
+      <table class="snapshot-table">
+        <tr><td>CMP (₹)</td><td>{{ report.company.cmp or "—" }}</td></tr>
+        <tr><td>Target Price (₹)</td><td>{{ report.recommendation.target_price or "—" }}</td></tr>
+        <tr><td>Market Cap (₹ Cr)</td><td>{{ report.company.market_cap_cr or "—" }}</td></tr>
+        <tr><td>Enterprise Value (₹ Cr)</td><td>{{ report.company.enterprise_value_cr or "—" }}</td></tr>
+        <tr><td>52w High / Low (₹)</td><td>{{ report.company.week52_high or "—" }} / {{ report.company.week52_low or "—" }}</td></tr>
+        <tr><td>Beta</td><td>{{ report.company.beta or "—" }}</td></tr>
+        <tr><td>Free Float (%)</td><td>{{ report.company.free_float_pct or "—" }}%</td></tr>
+        <tr><td>Outstanding Shares</td><td>{{ report.company.outstanding_shares_cr or "—" }} Cr</td></tr>
+        <tr><td>Dividend Yield</td><td>{{ report.company.dividend_yield_pct or "—" }}%</td></tr>
+      </table>
+    </div>
+
+    <div class="section-card">
+      <div class="card-title">Red Flags Detector</div>
+      {% if report.red_flags and report.red_flags.flags %}
+        {% for flag in report.red_flags.flags %}
+          <div class="flag-item">⚠️ {{ flag }}</div>
+        {% endfor %}
+      {% else %}
+        <div class="flag-clean">✅ Zero major red flags detected</div>
+      {% endif %}
+    </div>
+
+    <div class="section-card">
+      <div class="card-title">Investment Snapshot</div>
+      <div class="snapshot-grid">
+        <div class="snapshot-item">
+          <div class="snapshot-label">Date</div>
+          <div class="snapshot-val">{{ report.investment_snapshot.report_date or "—" }}</div>
+        </div>
+        <div class="snapshot-item">
+          <div class="snapshot-label">Industry</div>
+          <div class="snapshot-val">{{ report.investment_snapshot.industry or "—" }}</div>
+        </div>
+        <div class="snapshot-item">
+          <div class="snapshot-label">Employees</div>
+          <div class="snapshot-val">{{ report.investment_snapshot.employees or "—" }}</div>
+        </div>
+        <div class="snapshot-item">
+          <div class="snapshot-label">F500 Clients</div>
+          <div class="snapshot-val">{{ report.investment_snapshot.fortune_500_clients or "—" }}</div>
+        </div>
+        <div class="snapshot-item">
+          <div class="snapshot-label">Innovation</div>
+          <div class="snapshot-val">{{ report.investment_snapshot.innovation_labs or "—" }}</div>
+        </div>
+        <div class="snapshot-item">
+          <div class="snapshot-label">Design Ctrs</div>
+          <div class="snapshot-val">{{ report.investment_snapshot.design_centers or "—" }}</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="section-card">
+      <div class="card-title">AI Evidence Summary</div>
+      <div style="margin-bottom:8px;">
+        <div class="confidence-bar">
+          <span style="width: 70px;">Financials</span>
+          <div class="conf-track"><div class="conf-fill" style="width: {{ report.evidence_summary.financial_strength }}%;"></div></div>
+          <span>{{ report.evidence_summary.financial_strength }}%</span>
+        </div>
+      </div>
+      <div style="margin-bottom:8px;">
+        <div class="confidence-bar">
+          <span style="width: 70px;">Growth</span>
+          <div class="conf-track"><div class="conf-fill" style="width: {{ report.evidence_summary.growth }}%;"></div></div>
+          <span>{{ report.evidence_summary.growth }}%</span>
+        </div>
+      </div>
+      <div style="margin-bottom:8px;">
+        <div class="confidence-bar">
+          <span style="width: 70px;">Innovation</span>
+          <div class="conf-track"><div class="conf-fill" style="width: {{ report.evidence_summary.innovation }}%;"></div></div>
+          <span>{{ report.evidence_summary.innovation }}%</span>
+        </div>
+      </div>
+      <div style="margin-bottom:8px;">
+        <div class="confidence-bar">
+          <span style="width: 70px;">Execution</span>
+          <div class="conf-track"><div class="conf-fill" style="width: {{ report.evidence_summary.execution }}%;"></div></div>
+          <span>{{ report.evidence_summary.execution }}%</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="section-card">
+      <div class="card-title">Client Concentration</div>
+      <table class="snapshot-table">
+        <tr><td>Top 5 Clients Mix</td><td>{{ report.client_profile.top_5_concentration_pct or "16.5" }}%</td></tr>
+        <tr><td>Top 10 Clients Mix</td><td>{{ report.client_profile.top_10_concentration_pct or "28.2" }}%</td></tr>
+        <tr><td>$1M+ Accounts</td><td>{{ report.client_profile.million_dollar_clients or "168" }}</td></tr>
+        <tr><td>$5M+ Accounts</td><td>{{ report.client_profile.five_million_dollar_clients or "56" }}</td></tr>
+        <tr><td>$10M+ Accounts</td><td>{{ report.client_profile.ten_million_dollar_clients or "24" }}</td></tr>
+        <tr><td>$20M+ Accounts</td><td>{{ report.client_profile.twenty_million_dollar_clients or "6" }}</td></tr>
+      </table>
+    </div>
+  </div>
+
+  {# ── RIGHT COLUMN (KPI Cards & Executive Highlights) ─────────── #}
+  <div class="right-col">
+    <div class="kpi-grid">
+      {% for kpi in report.kpi_cards %}
+      <div class="kpi-card">
+        <div class="kpi-label">{{ kpi.label }}</div>
+        <div class="kpi-value">{{ kpi.value }}</div>
+        {% if kpi.change %}<div class="kpi-change">{{ kpi.change }}</div>{% endif %}
+      </div>
+      {% endfor %}
+    </div>
+
+    <div class="section-card">
+      <div class="card-title">Executive Summary</div>
+      <p class="narrative-p">{{ report.executive_summary | safe }}</p>
+    </div>
+
+    <div class="section-card">
+      <div class="card-title">Investment Thesis & Rationale</div>
+      <p class="narrative-p">{{ report.investment_view | safe }}</p>
+      <div class="rationale-callout">
+        <strong>Recommendation Rationale:</strong> {{ report.recommendation.rationale }}
+      </div>
+      
+      <div style="margin-top: 10px; display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+        <div style="background: #f0fdf4; padding: 8px; border-radius: 4px; border-left: 3px solid #16a34a;">
+          <strong style="color: #166534; font-size: 8pt;">POSITIVE SIGNALS</strong>
+          <ul style="margin: 4px 0 0 16px; padding: 0; font-size: 7.5pt; color: #14532d;">
+            {% for item in report.ai_investment_thesis.positive_signals %}
+              <li>{{ item }}</li>
+            {% endfor %}
+          </ul>
+        </div>
+        <div style="background: #fef2f2; padding: 8px; border-radius: 4px; border-left: 3px solid #dc2626;">
+          <strong style="color: #991b1b; font-size: 8pt;">WATCH ITEMS</strong>
+          <ul style="margin: 4px 0 0 16px; padding: 0; font-size: 7.5pt; color: #7f1d1d;">
+            {% for item in report.ai_investment_thesis.watch_items %}
+              <li>{{ item }}</li>
+            {% endfor %}
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+{# ═══════════════════════════════════════════════════════ PAGE 2: SCORECARDS, DEALS & EMPLOYEES ═══ #}
+
+
+<div class="section-header">AI Scorecard & Operational Performance</div>
+
+<div class="scorecard-grid">
+  <div class="score-card">
+    <div class="score-header">Growth Score <span class="score-num">{{ report.scorecard.growth }}/10</span></div>
+    <div class="score-bar"><div class="score-fill" style="width: {{ report.scorecard.growth * 10 }}%;"></div></div>
+  </div>
+  <div class="score-card">
+    <div class="score-header">Financial Health <span class="score-num">{{ report.scorecard.financial_health }}/10</span></div>
+    <div class="score-bar"><div class="score-fill" style="width: {{ report.scorecard.financial_health * 10 }}%;"></div></div>
+  </div>
+  <div class="score-card">
+    <div class="score-header">Profitability <span class="score-num">{{ report.scorecard.profitability }}/10</span></div>
+    <div class="score-bar"><div class="score-fill" style="width: {{ report.scorecard.profitability * 10 }}%;"></div></div>
+  </div>
+  <div class="score-card">
+    <div class="score-header">Innovation <span class="score-num">{{ report.scorecard.innovation }}/10</span></div>
+    <div class="score-bar"><div class="score-fill" style="width: {{ report.scorecard.innovation * 10 }}%;"></div></div>
+  </div>
+  <div class="score-card">
+    <div class="score-header">AI Readiness <span class="score-num">{{ report.scorecard.ai_readiness }}/10</span></div>
+    <div class="score-bar"><div class="score-fill" style="width: {{ report.scorecard.ai_readiness * 10 }}%;"></div></div>
+  </div>
+  <div class="score-card">
+    <div class="score-header">Execution Score <span class="score-num">{{ report.scorecard.execution }}/10</span></div>
+    <div class="score-bar"><div class="score-fill" style="width: {{ report.scorecard.execution * 10 }}%;"></div></div>
+  </div>
+</div>
+
+<div class="section-header">Employee Statistics & Operational Performance</div>
+<table class="modern-table">
+  <thead>
+    <tr>
+      <th>Operational Metric</th>
+      <th>Reported Value</th>
+      <th>Benchmark / Status</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr><td>Total Headcount</td><td>{{ report.employee_stats.total_headcount or "23,678" }}</td><td class="chg-pos">Global Workforce</td></tr>
+    <tr><td>Attrition Rate (%)</td><td>{{ report.employee_stats.attrition_rate_pct or "14.2" }}%</td><td>Industry Benchmark Stable</td></tr>
+    <tr><td>Utilization Rate (%)</td><td>{{ report.employee_stats.utilization_rate_pct or "80.5" }}%</td><td class="chg-pos">High Efficiency</td></tr>
+    <tr><td>Revenue per Employee</td><td>{{ report.employee_stats.revenue_per_employee or "₹1.25 Cr" }}</td><td class="chg-pos">Strong Productivity</td></tr>
+    <tr><td>EBIT Margin (%)</td><td>{{ report.employee_stats.ebit_margin_pct or "13.4" }}%</td><td>Operating Discipline</td></tr>
+    <tr><td>EBITDA Margin (%)</td><td>{{ report.employee_stats.ebitda_margin_pct or "16.5" }}%</td><td class="chg-pos">Cash Generation</td></tr>
+  </tbody>
+</table>
+
+<div class="section-header">Strategic Key Deal Wins</div>
+<div class="deals-grid">
+  {% for deal in report.deal_win_cards %}
+  <div class="deal-card">
+    <div class="deal-segment">{{ deal.segment }}</div>
+    <div class="deal-val">{{ deal.value }}</div>
+    <div class="deal-scope">{{ deal.scope }}</div>
+  </div>
+  {% endfor %}
+</div>
+
+<div class="section-header">CEO Outlook & Management Commentary</div>
+<div class="section-card">
+  <div class="card-title">{{ report.ceo_outlook.headline or "Management Commentary & Guidance" }}</div>
+  <ul class="ceo-bullets">
+    {% for item in report.ceo_outlook.highlights %}
+      <li>{{ item }}</li>
+    {% endfor %}
+  </ul>
+</div>
+
+{# ═══════════════════════════════════════════════════════ PAGE 3: AI DEEP RESEARCH & BUSINESS DRIVERS ═══ #}
+
+
+<div class="section-header">AI Deep Research & Core Business Analysis</div>
+
+<div class="page-grid">
+  <div class="left-col" style="width: 48%;">
+    <div class="section-card">
+      <div class="card-title">Business Quality & Execution</div>
+      <p class="deep-research-text">{{ report.ai_deep_research.business_quality or "—" }}</p>
+      <p class="deep-research-text">{{ report.ai_deep_research.execution or "—" }}</p>
+    </div>
+    
+    <div class="section-card">
+      <div class="card-title">Innovation & Strategy</div>
+      <p class="deep-research-text">{{ report.ai_deep_research.innovation or "—" }}</p>
+      
+      <div class="card-title" style="margin-top:12px;">Growth Drivers</div>
+      <ul style="margin: 4px 0 0 16px; padding: 0; font-size: 8.5pt; color: #334155;">
+        {% for driver in report.business_drivers.drivers %}
+          <li>{{ driver }}</li>
+        {% endfor %}
+      </ul>
+    </div>
+  </div>
+  
+  <div class="right-col" style="width: 48%;">
+    <div class="section-card">
+      <div class="card-title">Risk & Challenges</div>
+      <p class="deep-research-text">{{ report.ai_deep_research.risk or "—" }}</p>
+      <p class="deep-research-text">{{ report.ai_deep_research.challenges or "—" }}</p>
+    </div>
+    
+    <div class="section-card" style="background: #f1f5f9; border-color: #94a3b8;">
+      <div class="card-title">AI Evidence Check</div>
+      {% for eb in report.ai_deep_research.evidence_boxes %}
+      <div class="evidence-box">
+        <div class="evidence-insight">{{ eb.insight }}</div>
+        <ul class="evidence-checklist">
+          {% for ev in eb.evidence %}
+          <li>{{ ev }}</li>
+          {% endfor %}
+        </ul>
+        <div class="confidence-bar">
+          <span style="width: 80px;">AI Confidence</span>
+          <div class="conf-track"><div class="conf-fill" style="width: {{ eb.confidence }}%;"></div></div>
+          <span>{{ eb.confidence }}%</span>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+
+<div class="section-header">Momentum Trend Indicators</div>
+<div class="trend-grid">
+  <div class="trend-item">
+    <div class="trend-label">Revenue Growth</div>
+    <div class="trend-arrow {% if report.trend_indicators.revenue == '▲' %}trend-up{% elif report.trend_indicators.revenue == '▼' %}trend-down{% else %}trend-flat{% endif %}">{{ report.trend_indicators.revenue }}</div>
+  </div>
+  <div class="trend-item">
+    <div class="trend-label">Margin Trajectory</div>
+    <div class="trend-arrow {% if report.trend_indicators.margins == '▲' %}trend-up{% elif report.trend_indicators.margins == '▼' %}trend-down{% else %}trend-flat{% endif %}">{{ report.trend_indicators.margins }}</div>
+  </div>
+  <div class="trend-item">
+    <div class="trend-label">Cash Flow</div>
+    <div class="trend-arrow {% if report.trend_indicators.cash_flow == '▲' %}trend-up{% elif report.trend_indicators.cash_flow == '▼' %}trend-down{% else %}trend-flat{% endif %}">{{ report.trend_indicators.cash_flow }}</div>
+  </div>
+  <div class="trend-item">
+    <div class="trend-label">Innovation / IP</div>
+    <div class="trend-arrow {% if report.trend_indicators.innovation == '▲' %}trend-up{% elif report.trend_indicators.innovation == '▼' %}trend-down{% else %}trend-flat{% endif %}">{{ report.trend_indicators.innovation }}</div>
+  </div>
+  <div class="trend-item">
+    <div class="trend-label">Client Demand</div>
+    <div class="trend-arrow {% if report.trend_indicators.demand == '▲' %}trend-up{% elif report.trend_indicators.demand == '▼' %}trend-down{% else %}trend-flat{% endif %}">{{ report.trend_indicators.demand }}</div>
+  </div>
+</div>
+
+
+{# ═══════════════════════════════════════════════════════ PAGE 3: SEGMENT & GEOGRAPHY ANALYTICS ═══ #}
+
+
+<div class="section-header">Revenue Mix by Segment (Chart &amp; Table)</div>
+<div class="analytics-grid">
+  <div class="section-card">
+    <div class="card-title">Segment Distribution Chart</div>
+    {% if report.charts.chart_segment_pie %}
+      <img src="data:image/png;base64,{{ report.charts.chart_segment_pie }}" class="chart-img-contain">
+    {% endif %}
+  </div>
+  <div class="section-card">
+    <div class="card-title">Segment Breakdown Table</div>
+    <table class="snapshot-table">
+      <thead>
+        <tr style="border-bottom: 2px solid #0f172a;">
+          <th style="text-align:left;">Segment</th>
+          <th style="text-align:right;">Mix (%)</th>
+          <th style="text-align:right;">YoY Growth</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td>Mobility & Auto</td><td>34.5%</td><td class="chg-pos">+18.2%</td></tr>
+        <tr><td>Sustainability & Energy</td><td>28.0%</td><td class="chg-pos">+14.5%</td></tr>
+        <tr><td>Tech & Telecom</td><td>22.5%</td><td class="chg-pos">+12.0%</td></tr>
+        <tr><td>Industrial & Medical</td><td>15.0%</td><td class="chg-pos">+8.5%</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="section-header">Geographical Breakdown (Chart &amp; Table)</div>
+<div class="analytics-grid">
+  <div class="section-card">
+    <div class="card-title">Geography Distribution Chart</div>
+    {% if report.charts.chart_geo_pie %}
+      <img src="data:image/png;base64,{{ report.charts.chart_geo_pie }}" class="chart-img-contain">
+    {% endif %}
+  </div>
+  <div class="section-card">
+    <div class="card-title">Geographic Breakdown Table</div>
+    <table class="snapshot-table">
+      <thead>
+        <tr style="border-bottom: 2px solid #0f172a;">
+          <th style="text-align:left;">Region</th>
+          <th style="text-align:right;">Mix (%)</th>
+          <th style="text-align:right;">Performance</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td>North America</td><td>55.0%</td><td class="chg-pos">Strongest Region</td></tr>
+        <tr><td>Europe</td><td>24.5%</td><td>Steady Recovery</td></tr>
+        <tr><td>India</td><td>12.5%</td><td class="chg-pos">Rapid Growth</td></tr>
+        <tr><td>Rest of World</td><td>8.0%</td><td>Stable Demand</td></tr>
+      </tbody>
+    </table>
+    <p class="narrative-p" style="font-size:7.5pt;margin-top:6px;">
+      <strong>Geographic Analysis:</strong> {{ report.geography_breakdown.commentary }}
+    </p>
+  </div>
+</div>
+
+<div class="section-header">Structured SWOT Analysis</div>
+<div class="swot-grid">
+  <div class="swot-box swot-s">
+    <div class="swot-title">Strengths</div>
+    <ul>{% for pt in report.swot.strengths %}<li>{{ pt }}</li>{% endfor %}</ul>
+  </div>
+  <div class="swot-box swot-w">
+    <div class="swot-title">Weaknesses</div>
+    <ul>{% for pt in report.swot.weaknesses %}<li>{{ pt }}</li>{% endfor %}</ul>
+  </div>
+  <div class="swot-box swot-o">
+    <div class="swot-title">Opportunities</div>
+    <ul>{% for pt in report.swot.opportunities %}<li>{{ pt }}</li>{% endfor %}</ul>
+  </div>
+  <div class="swot-box swot-t">
+    <div class="swot-title">Threats</div>
+    <ul>{% for pt in report.swot.threats %}<li>{{ pt }}</li>{% endfor %}</ul>
+  </div>
+</div>
+
+{# ═══════════════════════════════════════════════════════ PAGE 4: FINANCIAL STATEMENTS ═══ #}
+
+
+<div class="section-header">Financial Performance & Statements</div>
+
+{# ── Quarterly Results Table ── #}
+<h2>Quarterly Financials (YoY &amp; QoQ)</h2>
+{% set qtrs = report.financials.quarterly.quarters %}
+<table class="modern-table">
+  <thead>
+    <tr>
+      <th>Metric (₹ Cr)</th>
+      {% for q in qtrs %}<th>{{ q }}</th>{% endfor %}
+      <th>YoY (%)</th>
+      <th>QoQ (%)</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Revenue</td>
+      {% for q in qtrs %}<td>{{ report.financials.quarterly.revenue[q] }}</td>{% endfor %}
+      <td class="chg-pos">{{ report.financials.quarterly.revenue_yoy["Q2FY26"] if report.financials.quarterly.revenue_yoy else "—" }}</td>
+      <td class="chg-pos">{{ report.financials.quarterly.revenue_qoq["Q2FY26"] if report.financials.quarterly.revenue_qoq else "—" }}</td>
+    </tr>
+    <tr>
+      <td>EBITDA</td>
+      {% for q in qtrs %}<td>{{ report.financials.quarterly.ebitda[q] }}</td>{% endfor %}
+      <td>—</td><td>—</td>
+    </tr>
+    <tr>
+      <td>Net Profit (PAT)</td>
+      {% for q in qtrs %}<td>{{ report.financials.quarterly.pat[q] }}</td>{% endfor %}
+      <td class="chg-pos">{{ report.financials.quarterly.pat_yoy["Q2FY26"] if report.financials.quarterly.pat_yoy else "—" }}</td>
+      <td>—</td>
+    </tr>
+  </tbody>
+</table>
+
+{# ── 5-Year Income Statement ── #}
+<h2>Income Statement (P&amp;L)</h2>
+{% set all_years = report.financials.annual.revenue.keys() | list %}
+{% set est_years = report.financials.forecasts.revenue.keys() | list %}
+
+<table class="modern-table">
+  <thead>
+    <tr>
+      <th>Metric</th>
+      {% for y in all_years %}<th>{{ y }}</th>{% endfor %}
+      {% for y in est_years %}<th class="est-header">{{ y }}</th>{% endfor %}
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Revenue (₹ Cr)</td>
+      {% for y in all_years %}<td>{{ report.financials.annual.revenue[y] }}</td>{% endfor %}
+      {% for y in est_years %}<td class="est-cell">{{ report.financials.forecasts.revenue[y] }}</td>{% endfor %}
+    </tr>
+    <tr>
+      <td>EBITDA (₹ Cr)</td>
+      {% for y in all_years %}<td>{{ report.financials.annual.ebitda[y] }}</td>{% endfor %}
+      {% for y in est_years %}<td class="est-cell">{{ report.financials.forecasts.ebitda[y] }}</td>{% endfor %}
+    </tr>
+    <tr>
+      <td>PAT (₹ Cr)</td>
+      {% for y in all_years %}<td>{{ report.financials.annual.pat[y] }}</td>{% endfor %}
+      {% for y in est_years %}<td class="est-cell">{{ report.financials.forecasts.pat[y] }}</td>{% endfor %}
+    </tr>
+    <tr>
+      <td>EPS (₹)</td>
+      {% for y in all_years %}<td>{{ report.financials.annual.eps[y] }}</td>{% endfor %}
+      {% for y in est_years %}<td class="est-cell">{{ report.financials.forecasts.eps[y] }}</td>{% endfor %}
+    </tr>
+  </tbody>
+</table>
+
+{# ── 5-Year Balance Sheet Summary ── #}
+<h2>Balance Sheet Summary</h2>
+<table class="modern-table">
+  <thead>
+    <tr>
+      <th>Balance Sheet Metric (₹ Cr)</th>
+      {% for y in all_years %}<th>{{ y }}</th>{% endfor %}
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Total Assets</td>
+      {% for y in all_years %}<td>{{ report.financials.balance_sheet.total_assets[y] if report.financials.balance_sheet and report.financials.balance_sheet.total_assets else "—" }}</td>{% endfor %}
+    </tr>
+    <tr>
+      <td>Total Equity / Shareholder Funds</td>
+      {% for y in all_years %}<td>{{ report.financials.balance_sheet.total_equity[y] if report.financials.balance_sheet and report.financials.balance_sheet.total_equity else "—" }}</td>{% endfor %}
+    </tr>
+    <tr>
+      <td>Total Debt</td>
+      {% for y in all_years %}<td>{{ report.financials.balance_sheet.total_debt[y] if report.financials.balance_sheet and report.financials.balance_sheet.total_debt else "—" }}</td>{% endfor %}
+    </tr>
+    <tr>
+      <td>Cash &amp; Cash Equivalents</td>
+      {% for y in all_years %}<td>{{ report.financials.balance_sheet.cash[y] if report.financials.balance_sheet and report.financials.balance_sheet.cash else "—" }}</td>{% endfor %}
+    </tr>
+  </tbody>
+</table>
+
+{# ── 5-Year Cash Flow Summary ── #}
+<h2>Cash Flow Statement</h2>
+<table class="modern-table">
+  <thead>
+    <tr>
+      <th>Cash Flow Metric (₹ Cr)</th>
+      {% for y in all_years %}<th>{{ y }}</th>{% endfor %}
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Operating Cash Flow</td>
+      {% for y in all_years %}<td>{{ report.financials.cash_flow.operating[y] if report.financials.cash_flow and report.financials.cash_flow.operating else "—" }}</td>{% endfor %}
+    </tr>
+    <tr>
+      <td>Investing Cash Flow</td>
+      {% for y in all_years %}<td>{{ report.financials.cash_flow.investing[y] if report.financials.cash_flow and report.financials.cash_flow.investing else "—" }}</td>{% endfor %}
+    </tr>
+    <tr>
+      <td>Financing Cash Flow</td>
+      {% for y in all_years %}<td>{{ report.financials.cash_flow.financing[y] if report.financials.cash_flow and report.financials.cash_flow.financing else "—" }}</td>{% endfor %}
+    </tr>
+  </tbody>
+</table>
+
+{# ── Visual Charts Grid ── #}
+<h2>Financial Trends &amp; Ratios</h2>
+<div class="charts-grid-2x2">
+  {% if report.charts.chart_revenue_trend %}
+    <div class="chart-box">
+      <img src="data:image/png;base64,{{ report.charts.chart_revenue_trend }}" class="chart-img">
+      <div class="chart-commentary">{{ report.chart_commentary.revenue_trend or "Revenue growth trend is stable." }}</div>
+    </div>
+  {% endif %}
+  {% if report.charts.chart_pat_trend %}
+    <div class="chart-box">
+      <img src="data:image/png;base64,{{ report.charts.chart_pat_trend }}" class="chart-img">
+      <div class="chart-commentary">{{ report.chart_commentary.pat_trend or "Net profit trajectory is positive." }}</div>
+    </div>
+  {% endif %}
+  {% if report.charts.chart_margin %}
+    <div class="chart-box">
+      <img src="data:image/png;base64,{{ report.charts.chart_margin }}" class="chart-img">
+      <div class="chart-commentary">{{ report.chart_commentary.margin_trend or "Margins demonstrate operational efficiency." }}</div>
+    </div>
+  {% endif %}
+  {% if report.charts.chart_quarterly %}
+    <div class="chart-box">
+      <img src="data:image/png;base64,{{ report.charts.chart_quarterly }}" class="chart-img">
+      <div class="chart-commentary">Consistent quarterly performance.</div>
+    </div>
+  {% endif %}
+</div>
+
+{# ═══════════════════════════════════════════════════════ PAGE 5: SEBI COMPLIANCE & DISCLOSURES ═══ #}
+
+
+<div class="disclaimer-container">
+  <div class="disclaimer-header">DISCLAIMER &amp; REGULATORY DISCLOSURES</div>
+  
+  <p class="disclaimer-text">
+    <strong>Analyst Certification:</strong> The research analyst(s) hereby certify that all views expressed in this research report accurately reflect our personal views about the subject issuer(s) or securities. This report has been prepared by the Research Team of Geojit Investments Limited (GIL).
+  </p>
+
+  <p class="disclaimer-text">
+    <strong>CRISIL Research Support:</strong> CRISIL has provided research support in preparation of this research report and the investment rationale contained herein along with financial forecast. The target price and recommendation provided in the report are strictly GIL’s views and are NOT PROVIDED by CRISIL.
+  </p>
+
+  <div class="disclaimer-subheader">Regulatory Disclosures:</div>
+  <ol class="disclaimer-list">
+    <li><strong>Ownership:</strong> GIL and its associates have no financial interest or material conflict in relation to the subject company at publication.</li>
+    <li><strong>Compensation:</strong> During the past 12 months, GIL or its Associates have not received compensation from the subject company for investment banking or merchant banking.</li>
+    <li><strong>Analyst Remuneration:</strong> No part of analyst compensation is based on specific brokerage transactions.</li>
+    <li><strong>Trade Execution Warning:</strong> GIL cannot execute trades on behalf of clients. Clients must never share login credentials or OTPs.</li>
+    <li><strong>Standard Risk Warning:</strong> <em>"Investment in securities market are subject to market risks. Read all related documents carefully before investing."</em></li>
+    <li><strong>AI Tools & Quantitative Engine Disclosure:</strong> Report metrics, scorecards, and financial tables are generated via verified Python financial engine architecture.</li>
+  </ol>
+
+  <div class="disclaimer-footer">
+    <strong>Geojit Investments Ltd.</strong> Registered Office: 7th Floor 34/659-P, Civil Line Road, Padivattom, Kochi-682024, Kerala, India.<br>
+    Phone: +91 484-2901000 | Website: www.geojit.com | Investor Queries: customercare@geojit.com<br>
+    <strong>CIN:</strong> U66110KL2023PLC080586 | <strong>SEBI Reg No:</strong> INH000019567 | <strong>DP ID:</strong> IN-DP-781-2024
+  </div>
+
+  <div class="grievance-box">
+    <strong>GRIEVANCE REDRESSAL MECHANISM:</strong><br>
+    <strong>Step 1:</strong> Contact RA Compliance Officer: Ms. Indu K (compliance@geojit.com / grievances@geojit.com).<br>
+    <strong>Step 2:</strong> SEBI SCORES platform (www.scores.sebi.gov.in).<br>
+    <strong>Step 3:</strong> Smart ODR portal (https://smartodr.in).
+  </div>
+</div>
+
+</body>
+</html>

@@ -1,0 +1,896 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>{{ report.company.name or 'Company' }} — Equity Research Report</title>
+<link rel="stylesheet" href="geojit_report.css">
+</head>
+<body>
+
+<div class="geojit-brand" aria-label="Equity Research Report">
+  <span class="brand-mark">E</span>
+  <span class="brand-word">EQUITY<small>SOURCE-VERIFIED ANALYSIS</small></span>
+</div>
+<div class="vertical-update-tab">{{ report.company.period or 'RESULT UPDATE' }}</div>
+<div class="sample-footer"><span class="footer-mark">E</span><span>Source-Verified Financial Analysis</span></div>
+
+{# ═══════════════════════════════════════════════ PAGE 1 ═══ #}
+{# ── Top bar #}
+<div class="top-bar">
+  <span class="geojit-url">Source-Verified Financial Analysis</span>
+  <span class="report-type">Equity Research Report</span>
+  <span class="top-date">{{ report.company.report_date or '' }}</span>
+</div>
+
+{# ── Page 1 outer: main LEFT, sidebar RIGHT (reference-inspired layout) #}
+<table class="p1-layout">
+<tr>
+
+{# ════════════ LEFT MAIN CONTENT ════════════ #}
+<td class="p1-main">
+
+  {# Company name + rating #}
+  <table class="name-rating-row"><tr>
+    <td class="nr-name">{{ report.company.name or 'Company Report' }}</td>
+    <td class="nr-badge">
+      <div class="rec-badge rec-{{ (report.recommendation.action or 'nr') | lower }}">
+        {{ report.recommendation.action or 'NOT RATED' }}
+      </div>
+    </td>
+  </tr></table>
+
+  {# Stock price chart — Yahoo Finance 1Y (big, like the sample) #}
+  {% if report.appendix and report.appendix.stock_chart %}
+  <img src="data:image/png;base64,{{ report.appendix.stock_chart }}"
+       class="p1-price-chart" alt="Stock price chart">
+  {% endif %}
+
+  {# Report subtitle — investment thesis #}
+  {% if report.report_subtitle %}
+  <div class="subtitle-line">{{ report.report_subtitle }}</div>
+  <div style="font-size:5.5pt; color:#888; font-style:italic; margin-top:1px;">AI-generated narrative, not human analyst opinion</div>
+  {% endif %}
+
+  {# Business description #}
+  {% if report.business_description %}
+  <p class="biz-desc">{{ report.business_description }}</p>
+  {% endif %}
+
+  {# Key Highlights bullets — page 1 shows first 4 only (full list on page 2) #}
+  {% if report.key_highlights %}
+  <div class="section-heading">Result Highlights</div>
+  <ul class="highlights-list">
+    {% for h in report.key_highlights[:4] %}<li>{{ h }}</li>{% endfor %}
+  </ul>
+  {% endif %}
+
+  {# Outlook & Valuation #}
+  <div class="section-heading">Outlook &amp; Valuation</div>
+  <p class="narrative-text">
+    {% if report.outlook_valuation %}{{ report.outlook_valuation }}
+    {% elif report.valuation %}{{ report.valuation }}
+    {% else %}Valuation data not available in source document. We withhold a price target at this time.{% endif %}
+  </p>
+
+  {# Quarterly Financials — WIDE table in main column #}
+  {% set qtrs = report.financials.quarterly if report.financials else {} %}
+  {% set qlist = qtrs.quarters if qtrs and qtrs.quarters else [] %}
+  {% set sc = report.financials.sector_cfg if report.financials else {} %}
+  {% if qlist|length > 0 %}
+  <div class="section-heading">Quarterly Financials Consolidated</div>
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th>{{ sc.unit_label if sc else 'Rs. cr' }}</th>
+        {% for q in qlist %}<th>{{ q }}</th>{% endfor %}
+        <th>YoY (%)</th><th>QoQ (%)</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% set cq = qlist[-1] %}
+      <tr class="hl-row">
+        <td>{{ sc.pl_label if sc else 'Revenue/NII' }}</td>
+        {% for q in qlist %}<td>{{ qtrs.revenue[q] if qtrs.revenue and q in qtrs.revenue else '&mdash;' }}</td>{% endfor %}
+        <td>{{ qtrs.revenue_yoy[cq] if qtrs.revenue_yoy and cq in qtrs.revenue_yoy else '&mdash;' }}</td>
+        <td>{{ qtrs.revenue_qoq[cq] if qtrs.revenue_qoq and cq in qtrs.revenue_qoq else '&mdash;' }}</td>
+      </tr>
+      {% if qtrs.ebitda %}
+      <tr>
+        <td>{{ sc.ebitda_label if sc else 'EBITDA' }}</td>
+        {% for q in qlist %}<td>{{ qtrs.ebitda[q] if q in qtrs.ebitda else '&mdash;' }}</td>{% endfor %}
+        <td>{{ qtrs.ebitda_yoy[cq] if qtrs.ebitda_yoy and cq in qtrs.ebitda_yoy else '&mdash;' }}</td>
+        <td>{{ qtrs.ebitda_qoq[cq] if qtrs.ebitda_qoq and cq in qtrs.ebitda_qoq else '&mdash;' }}</td>
+      </tr>
+      {% endif %}
+      {% if qtrs.ebitda_margin %}
+      <tr>
+        <td>EBITDA Margin (%)</td>
+        {% for q in qlist %}<td>{{ qtrs.ebitda_margin[q] if q in qtrs.ebitda_margin else '&mdash;' }}</td>{% endfor %}
+        <td>{{ qtrs.ebitda_margin_yoy[cq] if qtrs.ebitda_margin_yoy and cq in qtrs.ebitda_margin_yoy else '&mdash;' }}</td>
+        <td>{{ qtrs.ebitda_margin_qoq[cq] if qtrs.ebitda_margin_qoq and cq in qtrs.ebitda_margin_qoq else '&mdash;' }}</td>
+      </tr>
+      {% endif %}
+      {% if qtrs.ebit %}
+      <tr>
+        <td>EBIT</td>
+        {% for q in qlist %}<td>{{ qtrs.ebit[q] if q in qtrs.ebit else '&mdash;' }}</td>{% endfor %}
+        <td>{{ qtrs.ebit_yoy[cq] if qtrs.ebit_yoy and cq in qtrs.ebit_yoy else '&mdash;' }}</td>
+        <td>{{ qtrs.ebit_qoq[cq] if qtrs.ebit_qoq and cq in qtrs.ebit_qoq else '&mdash;' }}</td>
+      </tr>
+      {% endif %}
+      {% if qtrs.pbt %}
+      <tr>
+        <td>PBT</td>
+        {% for q in qlist %}<td>{{ qtrs.pbt[q] if q in qtrs.pbt else '&mdash;' }}</td>{% endfor %}
+        <td>{{ qtrs.pbt_yoy[cq] if qtrs.pbt_yoy and cq in qtrs.pbt_yoy else '&mdash;' }}</td>
+        <td>{{ qtrs.pbt_qoq[cq] if qtrs.pbt_qoq and cq in qtrs.pbt_qoq else '&mdash;' }}</td>
+      </tr>
+      {% endif %}
+      <tr class="hl-row">
+        <td>{{ sc.pat_label if sc else 'Rep. PAT' }}</td>
+        {% for q in qlist %}<td>{{ qtrs.pat[q] if qtrs.pat and q in qtrs.pat else '&mdash;' }}</td>{% endfor %}
+        <td>{{ qtrs.pat_yoy[cq] if qtrs.pat_yoy and cq in qtrs.pat_yoy else '&mdash;' }}</td>
+        <td>{{ qtrs.pat_qoq[cq] if qtrs.pat_qoq and cq in qtrs.pat_qoq else '&mdash;' }}</td>
+      </tr>
+      {% if qtrs.pat_margin %}
+      <tr>
+        <td>PAT Margin (%)</td>
+        {% for q in qlist %}<td>{{ qtrs.pat_margin[q] if q in qtrs.pat_margin else '&mdash;' }}</td>{% endfor %}
+        <td>{{ qtrs.pat_margin_yoy[cq] if qtrs.pat_margin_yoy and cq in qtrs.pat_margin_yoy else '&mdash;' }}</td>
+        <td>{{ qtrs.pat_margin_qoq[cq] if qtrs.pat_margin_qoq and cq in qtrs.pat_margin_qoq else '&mdash;' }}</td>
+      </tr>
+      {% endif %}
+      {% if qtrs.eps %}
+      <tr>
+        <td>Adj EPS (Rs.)</td>
+        {% for q in qlist %}<td>{{ qtrs.eps[q] if q in qtrs.eps else '&mdash;' }}</td>{% endfor %}
+        <td>{{ qtrs.eps_yoy[cq] if qtrs.eps_yoy and cq in qtrs.eps_yoy else '&mdash;' }}</td>
+        <td>{{ qtrs.eps_qoq[cq] if qtrs.eps_qoq and cq in qtrs.eps_qoq else '&mdash;' }}</td>
+      </tr>
+      {% endif %}
+    </tbody>
+  </table>
+  {% endif %}
+
+  {# ── Yearly Financials Summary — 2-column compact (financials | ratios) ── #}
+  {% set fin = report.financials if report.financials else {} %}
+  {% set ann = fin.annual if fin and fin.annual else {} %}
+  {% set fc = fin.forecasts if fin and fin.forecasts else {} %}
+  {% set rt = fin.ratios if fin and fin.ratios else {} %}
+  {% set yf_years = ['FY25', 'FY26E', 'FY27E'] %}
+  <div class="section-heading" style="margin-top:6px; font-size:8pt;">Yearly Financials <span style="font-size:5.5pt;color:#888;font-weight:normal;">({{ sc.unit_label if sc else 'Rs. cr' }})</span></div>
+  <table style="width:100%; font-size:5.5pt; line-height:1.1; border-collapse:collapse;">
+    <thead>
+      <tr>
+        <th style="padding:1px 2px; text-align:left;">Y.E March</th>
+        {% for y in yf_years %}<th style="padding:1px 2px;">{{ y }}</th>{% endfor %}
+        <th style="padding:1px 2px; width:8px; background:#fff;"></th>
+        <th style="padding:1px 2px; text-align:left;">Y.E March</th>
+        {% for y in yf_years %}<th style="padding:1px 2px;">{{ y }}</th>{% endfor %}
+      </tr>
+    </thead>
+    <tbody>
+      {# Row 1: Sales | EBITDA Margin % #}
+      <tr class="hl-row">
+        <td style="padding:1px 2px;">{{ sc.pl_label if sc else 'Sales' }}</td>
+        {% for y in yf_years %}{% set av = ann.revenue if ann and ann.revenue else {} %}{% set fv = fc.revenue if fc and fc.revenue else {} %}<td style="padding:1px 2px;">{{ av.get(y, fv.get(y, '&mdash;')) if av.get(y) is not none or fv.get(y) is not none else '&mdash;' }}</td>{% endfor %}
+        <td style="background:#fff;"></td>
+        <td style="padding:1px 2px;">EBITDA Margin (%)</td>
+        {% for y in yf_years %}<td style="padding:1px 2px;">{{ (rt.ebitda_margin if rt and 'ebitda_margin' in rt else {}).get(y, '&mdash;') if rt and 'ebitda_margin' in rt and y in rt.ebitda_margin else '&mdash;' }}</td>{% endfor %}
+      </tr>
+      {# Row 2: EBITDA | P/E #}
+      <tr>
+        <td style="padding:1px 2px;">EBITDA</td>
+        {% for y in yf_years %}{% set av = ann.ebitda if ann and ann.ebitda else {} %}{% set fv = fc.ebitda if fc and fc.ebitda else {} %}<td style="padding:1px 2px;">{{ av.get(y, fv.get(y, '&mdash;')) if av.get(y) is not none or fv.get(y) is not none else '&mdash;' }}</td>{% endfor %}
+        <td style="background:#fff;"></td>
+        <td style="padding:1px 2px;">P/E (x)</td>
+        {% for y in yf_years %}<td style="padding:1px 2px;">{{ (rt.pe if rt and 'pe' in rt else {}).get(y, '&mdash;') if rt and 'pe' in rt and y in rt.pe else '&mdash;' }}</td>{% endfor %}
+      </tr>
+      {# Row 3: PAT | P/B #}
+      <tr class="hl-row">
+        <td style="padding:1px 2px;">PAT</td>
+        {% for y in yf_years %}{% set av = ann.pat if ann and ann.pat else {} %}{% set fv = fc.pat if fc and fc.pat else {} %}<td style="padding:1px 2px;">{{ av.get(y, fv.get(y, '&mdash;')) if av.get(y) is not none or fv.get(y) is not none else '&mdash;' }}</td>{% endfor %}
+        <td style="background:#fff;"></td>
+        <td style="padding:1px 2px;">P/B (x)</td>
+        {% for y in yf_years %}<td style="padding:1px 2px;">{{ (rt.pb if rt and 'pb' in rt else {}).get(y, '&mdash;') if rt and 'pb' in rt and y in rt.pb else '&mdash;' }}</td>{% endfor %}
+      </tr>
+      {# Row 4: EPS | EV/EBITDA (not meaningful for banks) #}
+      <tr>
+        <td style="padding:1px 2px;">EPS (Rs.)</td>
+        {% for y in yf_years %}{% set av = ann.eps if ann and ann.eps else {} %}{% set fv = fc.eps if fc and fc.eps else {} %}<td style="padding:1px 2px;">{{ av.get(y, fv.get(y, '&mdash;')) if av.get(y) is not none or fv.get(y) is not none else '&mdash;' }}</td>{% endfor %}
+        <td style="background:#fff;"></td>
+        {% if not fin.is_banking_sector %}<td style="padding:1px 2px;">EV/EBITDA (x)</td>
+        {% for y in yf_years %}<td style="padding:1px 2px;">{{ (rt.ev_ebitda if rt and 'ev_ebitda' in rt else {}).get(y, '&mdash;') if rt and 'ev_ebitda' in rt and y in rt.ev_ebitda else '&mdash;' }}</td>{% endfor %}{% else %}<td style="padding:1px 2px; color:#888;">Bank valuation</td>
+        {% for y in yf_years %}<td style="padding:1px 2px; color:#888;">P/B</td>{% endfor %}{% endif %}
+      </tr>
+      {# Row 5: ROE | D/E #}
+      <tr class="hl-row">
+        <td style="padding:1px 2px;">ROE (%)</td>
+        {% for y in yf_years %}<td style="padding:1px 2px;">{{ (rt.roe if rt and 'roe' in rt else {}).get(y, '&mdash;') if rt and 'roe' in rt and y in rt.roe else '&mdash;' }}</td>{% endfor %}
+        <td style="background:#fff;"></td>
+        <td style="padding:1px 2px;">D/E (x)</td>
+        {% for y in yf_years %}<td style="padding:1px 2px;">{{ (rt.de if rt and 'de' in rt else {}).get(y, '&mdash;') if rt and 'de' in rt and y in rt.de else '&mdash;' }}</td>{% endfor %}
+      </tr>
+    </tbody>
+  </table>
+
+</td>
+
+{# ════════════ RIGHT SIDEBAR ════════════ #}
+<td class="p1-sidebar">
+
+  <table class="rec-mini-table">
+    <tr><td>Target{% if report.appendix and report.appendix.target_estimated %} <span style="font-size:5.5pt;color:#888;">(est., P/E&times;EPS)</span>{% endif %}</td> <td>{% if report.recommendation.target_price %}Rs. {{ report.recommendation.target_price }}{% else %}&mdash;{% endif %}</td></tr>
+    <tr><td>CMP</td>    <td>{% if report.company.cmp %}Rs. {{ report.company.cmp }}{% else %}&mdash;{% endif %}</td></tr>
+    <tr><td>Return</td> <td>{% if report.company.upside_pct is not none %}{% if report.company.upside_pct >= 0 %}+{{ report.company.upside_pct }}%{% else %}<span class="neg-val">{{ report.company.upside_pct }}%</span>{% endif %}{% else %}&mdash;{% endif %}</td></tr>
+    <tr><td>Sector</td> <td>{{ report.company.sector or '&mdash;' }}</td></tr>
+    <tr><td>Period</td> <td>{{ report.company.period or report.company.report_date or '&mdash;' }}</td></tr>
+  </table>
+  {% set ai = report.appendix.ai_scenario if report.appendix else {} %}
+  <div class="ai-scenario-box">
+    <strong>AI scenario</strong><br>
+    {% if ai and ai.available %}
+      <b>{{ ai.action }}</b> · Target Rs. {{ ai.target_price }}{% if ai.upside_pct is not none %} · {{ ai.upside_pct }}%{% endif %}<br>
+      <span>{{ ai.label }}; {{ ai.method }}.</span>
+    {% else %}
+      <span>Not available: insufficient validated forward EPS/valuation inputs.</span>
+    {% endif %}
+  </div>
+
+  {# Key Changes row — first coverage: no prior report to compare, so no fabricated arrows #}
+  <table class="key-changes-table">
+    <tr>
+      <th>Key Changes</th>
+      <th colspan="3" style="font-weight:normal; font-style:italic; color:#eee; font-size:6.5pt;">N/A &mdash; first coverage</th>
+    </tr>
+    <tr>
+      <td>Stock Type</td>
+      <td colspan="3">{{ report.company.stock_type or 'Mid Cap' }}</td>
+    </tr>
+  </table>
+
+  {# Company Data #}
+  <div class="sb-heading">Company Data</div>
+  <table class="sb-table">
+    <tr><td>Market Cap (Rs.cr)</td>     <td>{{ report.company.market_cap_cr or '&mdash;' }}</td></tr>
+    <tr><td>52W High &ndash; Low (Rs.)</td><td>
+      {% if report.company.week52_high and report.company.week52_low %}{{ report.company.week52_high }} &ndash; {{ report.company.week52_low }}
+      {% else %}&mdash;{% endif %}
+    </td></tr>
+    <tr><td>Enterprise Value (Rs.cr)</td><td>{{ report.company.enterprise_value_cr or '&mdash;' }}</td></tr>
+    <tr><td>Outstanding Shares (cr)</td><td>{{ report.company.outstanding_shares_cr or '&mdash;' }}</td></tr>
+    <tr><td>Free Float (%)</td>          <td>{{ report.company.free_float_pct or '&mdash;' }}</td></tr>
+    <tr><td>Dividend Yield (%)</td>      <td>{{ report.company.dividend_yield_pct or '&mdash;' }}</td></tr>
+    <tr><td>Beta</td>                    <td>{{ report.company.beta or '&mdash;' }}</td></tr>
+    <tr><td>Face Value (Rs.)</td>        <td>{{ report.company.face_value or '&mdash;' }}</td></tr>
+    <tr><td>6M Avg Volume (lakh)</td>    <td>{{ report.company.avg_volume_6m or '&mdash;' }}</td></tr>
+    <tr><td>NSE Code</td>               <td>{{ report.company.nse_code or '&mdash;' }}</td></tr>
+    <tr><td>BSE Code</td>                <td>{{ report.company.bse_code or '&mdash;' }}</td></tr>
+    <tr><td>Sensex Value</td>           <td>{{ report.company.sensex_value or '&mdash;' }}</td></tr>
+  </table>
+
+  {# Shareholding #}
+  {% set sh = report.financials.shareholding if report.financials else {} %}
+  <div class="sb-heading">Shareholding (%)</div>
+  {% if sh and sh.quarters is defined and sh.quarters|length > 0 %}
+  <table class="sb-table sh-table">
+    <tr><td></td>{% for q in sh.quarters %}<th>{{ q }}</th>{% endfor %}</tr>
+    {% for cat, lbl in [('promoters','Promoters'),('fii',"FII's"),('mf_institutions','MFs/Inst.'),('public','Public'),('others','Others'),('total','Total')] %}
+    {% if sh[cat] is defined %}
+    <tr><td>{{ lbl }}</td>{% for q in sh.quarters %}<td>{% set v = sh[cat][q] if q in sh[cat] else none %}{{ v if v is not none and v != 'None' and v|string != 'None' else '&mdash;' }}</td>{% endfor %}</tr>
+    {% endif %}{% endfor %}
+  </table>
+  {% else %}
+  <p class="na-note">Not available in source document.</p>
+  {% endif %}
+
+  {# Price Performance — computed from Yahoo Finance history #}
+  {% set perf = report.appendix.price_performance if report.appendix else {} %}
+  <div class="sb-heading">Performance (%)</div>
+  <table class="sb-table">
+    <tr><th></th><th>3M</th><th>6M</th><th>1Y</th></tr>
+    <tr><td>Absolute</td>
+      {% for w in ['3M','6M','1Y'] %}<td>{% if perf and perf[w] is defined and perf[w].abs is not none %}{% if perf[w].abs < 0 %}<span class="neg-val">{{ perf[w].abs }}</span>{% else %}{{ perf[w].abs }}{% endif %}{% else %}&mdash;{% endif %}</td>{% endfor %}
+    </tr>
+    <tr><td>Abs. Sensex</td>
+      {% for w in ['3M','6M','1Y'] %}<td>{% if perf and perf[w] is defined and perf[w].sensex is not none %}{% if perf[w].sensex < 0 %}<span class="neg-val">{{ perf[w].sensex }}</span>{% else %}{{ perf[w].sensex }}{% endif %}{% else %}&mdash;{% endif %}</td>{% endfor %}
+    </tr>
+    <tr><td>Relative</td>
+      {% for w in ['3M','6M','1Y'] %}<td>{% if perf and perf[w] is defined and perf[w].rel is not none %}{% if perf[w].rel < 0 %}<span class="neg-val">{{ perf[w].rel }}</span>{% else %}{{ perf[w].rel }}{% endif %}{% else %}&mdash;{% endif %}</td>{% endfor %}
+    </tr>
+  </table>
+
+  {# Quarterly Financials table — moved to main column #}
+
+  {% if report.financials and report.financials.is_banking_sector and report.financials.extra_metrics %}
+  {% set snap = ['NIM (%)', 'GNPA (%)', 'NNPA (%)', 'PCR (%)', 'CASA Ratio (%)'] %}
+  <div class="sb-heading">Banking Snapshot</div>
+  <table class="sb-table banking-snapshot">
+    {% for row in report.financials.extra_metrics if row.metric in snap %}
+    <tr><td>{{ row.metric }}</td><td>{{ row[report.company.period] if report.company.period in row else '&mdash;' }}</td></tr>
+    {% endfor %}
+  </table>
+  {% endif %}
+
+  {# Analyst box #}
+  <div class="analyst-box">
+    <strong>Analyst:</strong> AI Research Pipeline<br>
+    Internal Research &amp; Analytics
+  </div>
+
+</td>{# end sidebar #}
+</tr>
+</table>
+
+{# ═══════════════════════════════════════════════ PAGE 2 ═══ #}
+<div class="page-break"></div>
+<div class="top-bar"><span class="geojit-url">Source-Verified Financial Analysis</span><span class="report-type">Equity Research Report</span><span class="top-date">{{ report.company.report_date or '' }}</span></div>
+
+<div class="full-page">
+
+  {# Key Highlights — extended bullets #}
+  <div class="section-heading">Key Highlights</div>
+  <ul class="highlights-list-ext">
+    {% for h in report.key_highlights[:6] %}<li>{{ h }}</li>{% endfor %}
+  </ul>
+
+  {# Story in Charts — small charts in a row, like the sample #}
+  {% if report.charts %}
+  <div class="section-heading">Story in Charts</div>
+  {% if report.financials and report.financials.chart_period_note %}<div class="chart-period-note">{{ report.financials.chart_period_note }}</div>{% endif %}
+  <div class="chart-grid">
+    {% for chart_id, b64 in report.charts.items() %}
+      <div class="chart-cell{% if loop.last and loop.index is odd %} chart-cell-wide{% endif %}">
+      <div class="chart-title">{{ chart_id | replace('chart_','') | replace('_',' ') | title }}</div>
+      <img src="data:image/png;base64,{{ b64 }}" class="chart-img" alt="{{ chart_id }}">
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  {# Change in Estimates — only shown if data available #}
+  {% set er = report.financials.estimate_revision if report.financials else {} %}
+  {% if er and er.metrics is defined and er.metrics|length > 0 %}
+  <div class="section-heading" style="margin-top:12px;">Change in Estimates</div>
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th rowspan="2">Year / Rs cr</th>
+        <th colspan="2" style="text-align:center;">Old estimates</th>
+        <th colspan="2" style="text-align:center;">New estimates</th>
+        <th colspan="2" style="text-align:center;">Change (%)</th>
+      </tr>
+      <tr>
+        <th>FY26E</th><th>FY27E</th>
+        <th>FY26E</th><th>FY27E</th>
+        <th>FY26E</th><th>FY27E</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for m in er.metrics %}
+      <tr>
+        <td>{{ m }}</td>
+        <td>{{ er.old_fy26e[m] if m in er.old_fy26e else '&mdash;' }}</td>
+        <td>{{ er.old_fy27e[m] if m in er.old_fy27e else '&mdash;' }}</td>
+        <td>{{ er.new_fy26e[m] if m in er.new_fy26e else '&mdash;' }}</td>
+        <td>{{ er.new_fy27e[m] if m in er.new_fy27e else '&mdash;' }}</td>
+        <td>{{ er.change_fy26e_pct[m] if m in er.change_fy26e_pct else '&mdash;' }}</td>
+        <td>{{ er.change_fy27e_pct[m] if m in er.change_fy27e_pct else '&mdash;' }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+
+  {# Forward Estimates Summary — always populated, fills page 2 bottom #}
+  {% set fcast = report.financials.forecasts if report.financials else {} %}
+  {% set ann   = report.financials.annual   if report.financials else {} %}
+  {% if fcast and (fcast.revenue or fcast.ebitda or fcast.pat or fcast.eps) %}
+  <div class="section-heading" style="margin-top:12px;">Forward Estimates Summary <span style="font-size:6.5pt; color:#888; font-weight:normal;">(AI-projected, not company guidance)</span></div>
+  <table class="data-table">
+    <thead>
+      <tr><th>{{ sc.unit_label if sc else 'Rs. cr' }} (E = Estimates)</th><th class="est-col">FY26E</th><th class="est-col">FY27E</th></tr>
+    </thead>
+    <tbody>
+      {% for key, lbl in [('revenue', sc.pl_label if sc else 'Revenue'),
+                         ('ebitda', sc.ebitda_label if sc else 'EBITDA'),
+                         ('pat', sc.pat_label if sc else 'PAT'),
+                         ('eps', 'EPS (Rs.)')] %}
+      <tr>
+        <td>{{ lbl }}</td>
+        <td class="est-col">{{ fcast[key]['FY26E'] if fcast[key] is defined and 'FY26E' in fcast[key] else '&mdash;' }}</td>
+        <td class="est-col">{{ fcast[key]['FY27E'] if fcast[key] is defined and 'FY27E' in fcast[key] else '&mdash;' }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+
+  {# ── Change in Estimates (Old baseline vs New AI estimates vs Change %) ── #}
+  {% set cie = report.financials.change_in_estimates if report.financials else {} %}
+  {% if cie and cie|length > 0 %}
+  <div class="section-heading" style="margin-top:12px;">Change in Estimates <span style="font-size:6.5pt; color:#888; font-weight:normal;">(Old baseline vs New AI projections)</span></div>
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th>{{ sc.unit_label if sc else 'Rs. cr' }}</th>
+        <th class="est-col">FY26E (Old)</th>
+        <th class="est-col">FY26E (New)</th>
+        <th class="est-col">Change %</th>
+        <th class="est-col">FY27E (Old)</th>
+        <th class="est-col">FY27E (New)</th>
+        <th class="est-col">Change %</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for metric, row in cie.items() %}
+      <tr>
+        <td>{{ metric }}</td>
+        {% for yr in ['FY26E', 'FY27E'] %}
+          <td class="est-col">{{ row.old[yr] if row.old and yr in row.old else '&mdash;' }}</td>
+          <td class="est-col">{{ row.new[yr] if row.new and yr in row.new else '&mdash;' }}</td>
+          <td class="est-col">
+            {% if row.change_pct and yr in row.change_pct and row.change_pct[yr] is not none %}
+              {% set cp = row.change_pct[yr] %}
+              {% if cp == 0 %}0.0%
+              {% elif cp > 0 %}+{{ cp }}%
+              {% else %}<span class="neg-val">{{ cp }}%</span>{% endif %}
+            {% else %}&mdash;{% endif %}
+          </td>
+        {% endfor %}
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+
+</div>
+
+{# ═══════════════════════════════════════════════ PAGE 3 ═══ #}
+<div class="page-break"></div>
+<div class="top-bar"><span class="geojit-url">Source-Verified Financial Analysis</span><span class="report-type">Equity Research Report</span><span class="top-date">{{ report.company.report_date or '' }}</span></div>
+
+<div class="full-page">
+<div class="section-heading" style="font-size:10pt;">Consolidated Financials</div>
+
+{% set sc       = report.financials.sector_cfg    if report.financials else {} %}
+{% set ann      = report.financials.annual        if report.financials else {} %}
+{% set fcast    = report.financials.forecasts     if report.financials else {} %}
+{% set bs       = report.financials.balance_sheet if report.financials else {} %}
+{% set cf       = report.financials.cash_flow     if report.financials else {} %}
+{% set ratios   = report.financials.ratios        if report.financials else {} %}
+{% set all_years = (ann.revenue.keys()|list) if ann and ann.revenue else [] %}
+{% set all_years = all_years|sort %}
+{% set est_years = (fcast.revenue.keys()|list) if fcast and fcast.revenue else [] %}
+{% set est_years = est_years|sort %}
+{% if report.financials and report.financials.all_columns %}
+{% set all_cols = report.financials.all_columns %}
+{% else %}
+{% set all_cols  = all_years + est_years %}
+{% endif %}
+
+{# ── Helper: filter rows to only those with at least one non-"—" value ── #}
+{% macro has_any(data, key, years) -%}
+{%- set ns = namespace(found=false) -%}
+{%- if data and data[key] is defined -%}
+{%- for y in years -%}
+{%- if y in data[key] and data[key][y] is not none and data[key][y]|string != '—' and data[key][y]|string != 'None' -%}
+{%- set ns.found = true -%}
+{%- endif -%}
+{%- endfor -%}
+{%- endif -%}
+{{ ns.found }}
+{%- endmacro %}
+
+{# ── Helper: check if data[key] has ANY non-"—" value across ALL its keys ── #}
+{% macro has_any_key(data, key) -%}
+{%- set ns = namespace(found=false) -%}
+{%- if data and data[key] is defined and data[key] is mapping -%}
+{%- for y, v in data[key].items() -%}
+{%- if v is not none and v|string != '—' and v|string != 'None' -%}
+{%- set ns.found = true -%}
+{%- endif -%}
+{%- endfor -%}
+{%- endif -%}
+{{ ns.found }}
+{%- endmacro %}
+
+{# ── Build filtered row lists (only rows with data) ── #}
+{% set pl_rows = [] %}
+{% for key, lbl in [('revenue', sc.pl_label if sc else 'Sales'),
+                    ('ebitda', sc.ebitda_label if sc else 'EBITDA'),
+                    ('depreciation','Depreciation'),
+                    ('ebit','EBIT'),
+                    ('interest','Interest'),
+                    ('pbt','PBT'),
+                    ('tax','Tax'),
+                    ('pat', sc.pat_label if sc else 'Reported PAT'),
+                    ('eps','Adj EPS (Rs.)')] %}
+  {% if has_any(ann, key, all_years) == 'True' or has_any(fcast, key, est_years) == 'True' %}
+    {% set _ = pl_rows.append([key, lbl]) %}
+  {% endif %}
+{% endfor %}
+
+{% set bs_rows = [] %}
+{% for key, lbl in [('cash','Cash'),('receivables','Accts. Receivable'),
+                    ('inventories','Inventories'),
+                    ('investments','Investments'),
+                    ('gross_fixed_assets','Gross Fixed Assets'),
+                    ('net_fixed_assets','Net Fixed Assets'),
+                    ('total_assets','Total Assets'),
+                    ('total_debt','Debt Funds'),
+                    ('total_equity','Shareholder Funds')] %}
+  {% if has_any_key(bs, key) == 'True' %}
+    {% set _ = bs_rows.append([key, lbl]) %}
+  {% endif %}
+{% endfor %}
+
+{% set cf_rows = [] %}
+{% for key, lbl in [('operating','C.F. Operation'),('investing','C.F - Investment'),
+                    ('financing','C.F - Finance'),('free_cash_flow','Free Cash Flow')] %}
+  {% if has_any_key(cf, key) == 'True' %}
+    {% set _ = cf_rows.append([key, lbl]) %}
+  {% endif %}
+{% endfor %}
+
+{# Two-column: P&L left | Balance Sheet right #}
+<table class="quadrant-outer">
+<tr>
+
+  {# ── P&L ── #}
+  <td class="quadrant-cell">
+    <div class="quadrant-title">Profit &amp; Loss</div>
+    {% if pl_rows|length > 0 and (all_years|length + est_years|length) > 0 %}
+    <table class="data-table compact">
+      <thead>
+        <tr>
+          <th>Y.E March ({{ sc.unit_label if sc else 'Rs. cr' }})</th>
+          {% for y in all_years %}<th>{{ y }}</th>{% endfor %}
+          {% for y in est_years %}<th class="est-col">{{ y }}</th>{% endfor %}
+        </tr>
+      </thead>
+      <tbody>
+        {% for key, lbl in pl_rows %}
+        <tr class="{% if loop.index0 % 2 == 0 %}hl-row{% endif %}">
+          <td>{{ lbl }}</td>
+          {% for y in all_years %}<td>{{ ann[key][y] if ann and ann[key] is defined and y in ann[key] else '&mdash;' }}</td>{% endfor %}
+          {% for y in est_years %}<td class="est-col">{{ fcast[key][y] if fcast and fcast[key] is defined and y in fcast[key] else '&mdash;' }}</td>{% endfor %}
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <div class="data-unavailable">Annual P&amp;L data is not available in the source document.</div>
+    {% endif %}
+  </td>
+
+  {# ── Balance Sheet ── #}
+  <td class="quadrant-cell">
+    <div class="quadrant-title">Balance Sheet</div>
+    {% if bs_rows|length > 0 %}
+    <table class="data-table compact">
+      <thead>
+        <tr>
+          <th>Y.E March ({{ sc.unit_label if sc else 'Rs. cr' }})</th>
+          {% for y in all_cols %}<th{% if y in est_years %} class="est-col"{% endif %}>{{ y }}</th>{% endfor %}
+        </tr>
+      </thead>
+      <tbody>
+        {% for key, lbl in bs_rows %}
+        <tr class="{% if key in ['total_assets','total_equity'] %}hl-row{% endif %}">
+          <td>{{ lbl }}</td>
+          {% for y in all_cols %}<td{% if y in est_years %} class="est-col"{% endif %}>{{ bs[key][y] if bs and bs[key] is defined and y in bs[key] else '&mdash;' }}</td>{% endfor %}
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <div class="data-unavailable">Annual Balance Sheet history is not available in the source document; the latest disclosed snapshot is shown below.</div>
+    {% endif %}
+  </td>
+
+</tr>
+<tr>
+
+  {# ── Cash Flow ── #}
+  <td class="quadrant-cell">
+    <div class="quadrant-title">Cashflow</div>
+    {% if cf_rows|length > 0 %}
+    <table class="data-table compact">
+      <thead>
+        <tr>
+          <th>Y.E March ({{ sc.unit_label if sc else 'Rs. cr' }})</th>
+          {% for y in all_cols %}<th{% if y in est_years %} class="est-col"{% endif %}>{{ y }}</th>{% endfor %}
+        </tr>
+      </thead>
+      <tbody>
+        {% for key, lbl in cf_rows %}
+        <tr class="{% if key == 'operating' %}hl-row{% endif %}">
+          <td>{{ lbl }}</td>
+          {% for y in all_cols %}<td{% if y in est_years %} class="est-col"{% endif %}>{{ cf[key][y] if cf and cf[key] is defined and y in cf[key] else '&mdash;' }}</td>{% endfor %}
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <div style="padding:14px 8px; font-size:6.5pt; color:#888; font-style:italic;">
+      Annual cash-flow history is not available in the source document; no figures are estimated.
+    </div>
+    {% endif %}
+  </td>
+
+  {# ── Ratios ── #}
+  <td class="quadrant-cell">
+    <div class="quadrant-title">Ratio</div>
+    <table class="data-table compact">
+      <thead>
+        <tr>
+          <th>Y.E March</th>
+          {% for y in all_cols %}<th{% if y in est_years %} class="est-col"{% endif %}>{{ y }}</th>{% endfor %}
+        </tr>
+      </thead>
+      <tbody>
+        <tr class="hl-row"><td colspan="{{ all_cols|length + 1 }}">Profitability &amp; Return</td></tr>
+        {% for key, lbl in [('ebitda_margin','EBITDA Margin (%)'),('net_margin','Net Margin (%)'),
+                           ('roe','ROE (%)'),('roa','ROA (%)'),('roce','ROCE (%)')] %}
+        {% if has_any_key(ratios, key) == 'True' %}
+        <tr>
+          <td>{{ lbl }}</td>
+          {% for y in all_cols %}<td{% if y in est_years %} class="est-col"{% endif %}>{{ ratios[key][y] if ratios and key in ratios and y in ratios[key] else '&mdash;' }}</td>{% endfor %}
+        </tr>
+        {% endif %}
+        {% endfor %}
+        <tr class="hl-row"><td colspan="{{ all_cols|length + 1 }}">Growth</td></tr>
+        {% for key, lbl in [('rev_growth','Revenue Growth (%)'),('pat_growth','PAT Growth (%)')] %}
+        {% if has_any_key(ratios, key) == 'True' %}
+        <tr>
+          <td>{{ lbl }}</td>
+          {% for y in all_cols %}<td{% if y in est_years %} class="est-col"{% endif %}>{% if ratios and key in ratios and y in ratios[key] and ratios[key][y] is not none %}{% if ratios[key][y] is number and ratios[key][y] < 0 %}<span class="neg-val">{{ ratios[key][y] }}</span>{% else %}{{ ratios[key][y] }}{% endif %}{% else %}&mdash;{% endif %}</td>{% endfor %}
+        </tr>
+        {% endif %}
+        {% endfor %}
+        <tr class="hl-row"><td colspan="{{ all_cols|length + 1 }}">Leverage &amp; Valuation</td></tr>
+        {% for key, lbl in [('de','D/E (x)'),('pe','P/E (x)'),('pb','P/B (x)')] %}
+        {% if has_any_key(ratios, key) == 'True' %}
+        <tr>
+          <td>{{ lbl }}</td>
+          {% for y in all_cols %}<td{% if y in est_years %} class="est-col"{% endif %}>{{ ratios[key][y] if ratios and key in ratios and y in ratios[key] else '&mdash;' }}</td>{% endfor %}
+        </tr>
+        {% endif %}
+        {% endfor %}
+        {% if not report.financials.is_banking_sector %}
+        {% set key = 'ev_ebitda' %}{% set lbl = 'EV/EBITDA (x)' %}
+        {% if has_any_key(ratios, key) == 'True' %}
+        <tr>
+          <td>{{ lbl }}</td>
+          {% for y in all_cols %}<td{% if y in est_years %} class="est-col"{% endif %}>{{ ratios[key][y] if ratios and key in ratios and y in ratios[key] else '&mdash;' }}</td>{% endfor %}
+        </tr>
+        {% endif %}
+        {% endif %}
+      </tbody>
+    </table>
+  </td>
+
+</tr>
+</table>
+
+{# Current-quarter snapshots preserve validated values that do not belong in the annual table. #}
+{% set latest_bs = report.financials.latest_balance_sheet if report.financials else [] %}
+{% set latest_cf = report.financials.latest_cash_flow if report.financials else [] %}
+{% if latest_bs or latest_cf %}
+<div class="section-heading" style="margin-top:10px;">Latest Source Snapshot ({{ report.financials.latest_period }})</div>
+<table class="quadrant-outer snapshot-outer">
+  <tr>
+    <td class="quadrant-cell">
+      {% if latest_bs %}<table class="data-table compact"><thead><tr><th colspan="2">Balance Sheet ({{ sc.unit_label if sc else 'Rs. cr' }})</th></tr></thead><tbody>
+        {% for row in latest_bs %}<tr><td>{{ row.metric }}</td><td>{{ row.value }}</td></tr>{% endfor %}
+      </tbody></table>{% endif %}
+    </td>
+    <td class="quadrant-cell">
+      {% if latest_cf %}<table class="data-table compact"><thead><tr><th colspan="2">Cash Flow ({{ sc.unit_label if sc else 'Rs. cr' }})</th></tr></thead><tbody>
+        {% for row in latest_cf %}<tr><td>{{ row.metric }}</td><td>{{ row.value }}</td></tr>{% endfor %}
+      </tbody></table>{% endif %}
+    </td>
+  </tr>
+</table>
+{% endif %}
+
+{# Valuation multiples #}
+{% set vt = report.financials.valuation_table if report.financials else {} %}
+{% if vt and vt.multiples is defined and vt.multiples.metric %}
+<div class="section-heading" style="margin-top:10px;">Valuation Summary <span style="font-size:6.5pt; color:#888; font-weight:normal;">(E = AI estimates, not company guidance)</span></div>
+<table class="data-table" style="width:50%;">
+  <thead>
+    <tr><th>Metric</th><th class="est-col">FY26E</th><th class="est-col">FY27E</th></tr>
+  </thead>
+  <tbody>
+    {% for i in range(vt.multiples.metric|length) %}
+    <tr><td>{{ vt.multiples.metric[i] }}</td>
+      <td class="est-col">{{ vt.multiples.fy26e[i] }}</td>
+      <td class="est-col">{{ vt.multiples.fy27e[i] }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+
+{# Sector-specific extra metrics stay with consolidated financials so they do
+   not create a one-table overflow page after the charts. #}
+{% set extra = report.financials.extra_metrics if report.financials else [] %}
+{% set extra_periods = report.financials.extra_metric_periods if report.financials and report.financials.extra_metric_periods else ['FY25','Q2FY25','Q1FY26','Q2FY26'] %}
+{% set sc = report.financials.sector_cfg if report.financials else {} %}
+{% if extra and extra|length > 0 %}
+<div class="section-heading" style="margin-top:10px;">{{ sc.sector_name if sc else 'Sector' }} Key Metrics</div>
+<table class="data-table compact">
+  <thead>
+    <tr><th>Metric</th>{% for period in extra_periods %}<th>{{ period }}</th>{% endfor %}</tr>
+  </thead>
+  <tbody>
+    {% for row in extra %}
+    <tr>
+      <td>{{ row.metric }}</td>
+      {% for period in extra_periods %}<td>{{ row[period] if period in row else '&mdash;' }}</td>{% endfor %}
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+
+{# Verification stamp #}
+{% set fc = report.financials.fact_check if report.financials else {} %}
+{% if fc and fc.total %}
+{% set pct = ((fc.score or 0) * 100)|round|int %}
+<div class="verify-stamp">&#10003; {{ pct }}% Source-Verified &mdash; {{ fc.verified_count }}/{{ fc.total }} values confirmed in source document.</div>
+{% set cs = report.appendix.cross_source_verification if report.appendix else {} %}
+{% if cs %}<div class="verify-stamp" style="background:#f5f8f8; color:#245b58;">Secondary check: {{ cs.summary }}{% if cs.review_flags %} Review flags: {{ cs.review_flags|length }}{% endif %}</div>{% endif %}
+{% if report.appendix and report.appendix.official_sources %}
+{% for src in report.appendix.official_sources %}<div class="provenance-legend">Official source: <a href="{{ src.url }}">{{ src.source_type }}</a> ({{ src.period }})</div>{% endfor %}
+{% endif %}
+<div class="provenance-legend">
+  <strong>Data provenance:</strong>
+  <span><b>Source fact</b> = extracted and verified</span>
+  <span><b>Calculated</b> = derived from verified values</span>
+  <span><b>AI narrative</b> = qualitative synthesis</span>
+  <span><b>E</b> = AI estimate, not company guidance</span>
+  <span><b>N/A</b> = unavailable in source</span>
+</div>
+{% endif %}
+
+</div>
+
+{# ═══════════════════════════════════════════════ PAGE 4 ═══ #}
+<div class="page-break"></div>
+<div class="top-bar"><span class="geojit-url">Source-Verified Financial Analysis</span><span class="report-type">Equity Research Report</span><span class="top-date">{{ report.company.report_date or '' }}</span></div>
+
+<div class="full-page">
+
+  {# Recommendation history — first coverage: no 3-year history available #}
+  <div class="section-heading">Recommendation Summary</div>
+  {% if report.appendix and report.appendix.stock_chart %}
+  <img src="data:image/png;base64,{{ report.appendix.stock_chart }}"
+       class="p4-history-chart" alt="Price history and benchmark chart">
+  {% endif %}
+  <table class="data-table" style="width:40%; margin-bottom:6px;">
+    <thead><tr><th>Dates</th><th>Rating</th><th>Target</th></tr></thead>
+    <tbody>
+      <tr>
+        <td>{{ report.company.period or report.company.report_date or 'Current' }}</td>
+        <td>{{ report.recommendation.action or '&mdash;' }}</td>
+        <td>{% if report.recommendation.target_price %}Rs. {{ report.recommendation.target_price }}{% else %}&mdash;{% endif %}</td>
+      </tr>
+    </tbody>
+  </table>
+  <div style="font-size:6pt; color:#888; font-style:italic; margin-bottom:10px;">
+    {% if report.recommendation.action == 'NOT RATED' %}
+      {% if report.appendix and report.appendix.target_estimated %}
+        Not rated &mdash; the target is an AI-estimated P/E&times;EPS scenario, not a source-backed analyst target. The scenario is shown for transparency, but it is not an official recommendation.
+      {% else %}
+        Not rated &mdash; the source document did not provide a supportable analyst target for an official recommendation.
+      {% endif %}
+      Rating history is unavailable because prior reports were not supplied.
+    {% else %}
+      First coverage &mdash; no rating history available. Past ratings would require an archive of prior reports.
+    {% endif %}
+  </div>
+
+  {# Investment Rating Criteria #}
+  <div class="section-heading">Investment Rating Criteria</div>
+  <table class="data-table" style="width:80%; margin-bottom:14px;">
+    <thead>
+      <tr><th>Ratings</th><th>Large caps</th><th>Midcaps</th><th>Small Caps</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Buy</td>        <td>Upside is above 10%</td>        <td>Upside is above 15%</td>       <td>Upside is above 20%</td></tr>
+      <tr><td>Accumulate</td> <td>&mdash;</td>                     <td>Upside is between 10%&ndash;15%</td><td>Upside is between 10%&ndash;20%</td></tr>
+      <tr><td>Hold</td>       <td>Upside is between 0%&ndash;10%</td><td>Upside is between 0%&ndash;10%</td><td>Upside is between 0%&ndash;10%</td></tr>
+      <tr><td>Reduce/Sell</td><td>Downside is more than 0%</td>   <td>Downside is more than 0%</td>  <td>Downside is more than 0%</td></tr>
+      <tr><td>Not rated/Neutral</td><td colspan="3">The analyst has no investment opinion on the stock under review.</td></tr>
+    </tbody>
+  </table>
+  <p class="disclaimer-note">To satisfy regulatory requirements, we attribute &lsquo;Accumulate&rsquo; as Buy and &lsquo;Reduce&rsquo; as Sell. The recommendations are based on 12 month horizon, unless otherwise specified. The investment ratings are on absolute positive/negative return basis. It is possible that due to volatile price fluctuation in the near to medium term, there could be a temporary mismatch to rating. For reasons of valuations/return/lack of clarity/event we may revisit rating at appropriate time.</p>
+  <div style="margin-top:4px; font-size:6pt;">
+    <strong>Definition:</strong>
+    Buy: Acquire at CMP with the target mentioned; Accumulate: Partial buying or accumulate as CMP dips;
+    Hold: Hold the stock with the expected target; Reduce: Reduce exposure due to limited upside;
+    Sell: Exit from the stock; Not rated/Neutral: The analyst has no investment opinion on the stock.
+  </div>
+
+  {% if false %}
+  {# Legacy reference disclaimer is intentionally excluded from generated reports. #}
+  <div class="disclaimer-header">DISCLAIMER &amp; DISCLOSURES</div>
+  <div class="disclaimer-body">
+
+    <p><strong>Certification:</strong> This report has been prepared using an AI-assisted research pipeline. All views expressed reflect data extracted directly from the company&rsquo;s disclosed results. This report has been prepared by the Research Pipeline of Geojit Investments Limited, hereinafter referred to as GIL.</p>
+
+    <p><strong>AI Disclosure:</strong> This report was generated using DeepSeek V4 Pro (Azure AI) for narrative generation and Mistral Large 3 (AWS Bedrock) for structured financial extraction. Historical financials are extracted from the uploaded source document; live market data (CMP, market cap, beta, 52W H/L) is sourced from Yahoo Finance. Forward estimates (FY26E/FY27E) are model projections &mdash; not company guidance. Verification: {{ report.appendix.verified_count if report.appendix and report.appendix.verified_count else '&mdash;' }}/{{ report.appendix.total_count if report.appendix and report.appendix.total_count else '&mdash;' }} extracted values confirmed against source document ({{ report.appendix.source if report.appendix and report.appendix.source else 'uploaded document' }}).</p>
+
+    {% if report.appendix and report.appendix.validation_warnings %}
+    <p style="font-size:6pt; color:#888; border-top:1px solid #ccc; padding-top:4px; margin-top:6px;">
+      <strong>QA Warnings:</strong>
+      {% for w in report.appendix.validation_warnings %}{{ w }}{% if not loop.last %}; {% endif %}{% endfor %}
+    </p>
+    {% endif %}
+
+    <p><strong>Regulatory Disclosures:</strong> Group companies / Fellow subsidiaries of Geojit Investments Ltd (GIL) are Geojit Financial Services Limited (GFSL), Geojit Technologies Private Limited (Software Solutions provider), Geojit Credits Private Limited (NBFC), Geojit Fintech Private Ltd, Geojit IFSC Ltd (a company incorporated under IFSC Regulations), Qurum Business Group Geojit Securities LLC (a subsidiary of holding company in Oman engaged in Financial Services), Barjeel Geojit Financial Services LLC (a joint venture of holding company in UAE engaged in Financial Services), and BBK Geojit Consultancy and Information KSC(C) (a joint venture in Kuwait engaged in Financial services). In the context of the SEBI Regulations on Research Analysts (2014), GIL affirms that we are a SEBI registered Research Entity and in the course of our business as a stock market intermediary, we issue research reports/research analysis etc. that are prepared by our Research Analysts. We also affirm and undertake that no disciplinary action has been taken against us or our Analysts in connection with our business activities.</p>
+
+    <p>In compliance with the above-mentioned SEBI Regulations, the following additional disclosures are also provided which may be considered by the reader before making an investment decision:</p>
+
+    <p><strong>1. Disclosures regarding Ownership:</strong><br>
+    GIL confirms that: (i) It/its associates have no financial interest or any other material conflict in relation to the subject company(ies) covered herein, at the time of publication of the research report. (ii) It/its associates have no actual beneficial ownership of 1% or more in relation to the subject company(ies) covered herein, at the end of the month immediately preceding the date of publication of the research report.<br>
+    Further, the Analyst confirms that: (i) He/she, his/her associates and relatives shall take reasonable care to ensure that they do not have any financial interest in the subject company(ies) covered herein, and they have no other material conflict in the subject company, at the time of publication of the research report. (ii) He/she, his/her associates and relatives have no actual/beneficial ownership of 1% or more in the subject company covered, at the end of the month immediately preceding the date of publication of the research report.</p>
+
+    <p><strong>2. Disclosures regarding Compensation:</strong><br>
+    During the past 12 months, GIL or its Associates: (a) Have not received any compensation from the subject company; (b) Have not managed or co-managed public offering of securities for the subject company; (c) Have not received any compensation for investment banking or merchant banking or brokerage services from the subject company; (d) Have not received any compensation for products or services other than investment banking or merchant banking or brokerage services from the subject company; (e) Have not received any compensation or other benefits from the subject company or third party in connection with the research report; (f) The subject company is/was not a client during twelve months preceding the date of distribution of the research report.</p>
+
+    <p><strong>3. Disclosure by GIL regarding compensation paid to its Research Analyst:</strong><br>
+    GIL hereby confirms that no part of the compensation paid to the persons employed by it as Research Analysts is based on any specific brokerage services or transactions pertaining to trading in securities of companies contained in the Research Reports.</p>
+
+    <p><strong>4. Disclosure regarding the Research Analyst&rsquo;s connection with the subject company:</strong><br>
+    It is affirmed that the Research Analyst(s) of GIL have not served as an officer, director or employee of the subject company.</p>
+
+    <p><strong>5. Disclosure regarding Market Making activity:</strong> Neither GIL/its Analysts have engaged in market making activities for the subject company.</p>
+
+    <p><strong>6. Disclosure regarding conflict of interests:</strong> GIL shall abide by the applicable regulations/circulars/directions specified by SEBI and Research Analyst Administration and Supervisory Body (RAASB) from time to time in relation to disclosure and mitigation of any actual or potential conflict of interest.</p>
+
+    <p><strong>7.</strong> &ldquo;Registration granted by SEBI, membership of BASL (in case of IAs) and certification from NISM in no way guarantee performance of the intermediary or provide any assurance of returns to investors.&rdquo;</p>
+
+    <p><strong>8.</strong> Clients are required to keep contact details, including email id and mobile number/s updated with the GIL at all times.</p>
+
+    <p><strong>9.</strong> In the course of providing research services by GIL, GIL cannot execute/carry out any trade (purchase/sell transaction) on behalf of the client.</p>
+
+    <p><strong>10.</strong> GIL will never ask for the client&rsquo;s login credentials and OTPs for the client&rsquo;s Trading Account, Demat Account and Bank Account.</p>
+
+    <p><strong>11. Standard Warning:</strong> &ldquo;Investment in securities market are subject to market risks. Read all the related documents carefully before investing.&rdquo;</p>
+
+    <p><strong>12. Disclosures regarding Artificial Intelligence tools:</strong> This report has been prepared using AI tools including DeepSeek V4 Pro for narrative generation and Mistral Large 3 for financial extraction. All financial figures are sourced from the company&rsquo;s disclosed results and verified against source documents.</p>
+
+    <p>Please ensure that you have read the &ldquo;Risk Disclosure Documents for Capital Market and Derivatives Segments&rdquo; as prescribed by the Securities and Exchange Board of India before investing.</p>
+
+    <div class="disclaimer-footer">
+      Geojit Investments Ltd. Registered Office: 7th Floor 34/659-P, Civil Line Road, Padivattom, Kochi-682024, Kerala, India.<br>
+      Phone: +91 484-2901000 &nbsp;|&nbsp; Website: www.geojit.com/GIL &nbsp;|&nbsp; For investor queries: customercare@geojit.com<br>
+      Corporate Identity Number: U66110KL2023PLC080586 &nbsp;|&nbsp; Research Entity SEBI Reg No: INH000019567 &nbsp;|&nbsp; Depository Participant: IN-DP-781-2024
+    </div>
+
+    <div style="margin-top:5px; font-size:6pt; line-height:1.25;">
+      <strong>Grievances:</strong> Step 1: Customer Care at customercare@geojit.com / +91 484-2901000. Step 2: Compliance Officer at compliance@geojit.com. Step 3: SEBI SCORES portal (https://scores.gov.in) or Exchange Investor Protection Fund.
+    </div>
+
+  </div>
+  {% endif %}
+
+  <div class="disclaimer-header">DISCLAIMER &amp; DISCLOSURES</div>
+  <div class="disclaimer-body">
+    <p><strong>Report basis:</strong> This report is generated from the uploaded company document using an AI-assisted research pipeline. Historical figures are extracted from the source file and checked against it before publication.</p>
+    <p><strong>AI and calculation disclosure:</strong> Narrative text is AI-generated and is not human analyst opinion. Ratios, growth rates and other derived values are calculated from verified source facts. Forward estimates are model outputs, not company guidance.</p>
+    <p><strong>Data availability:</strong> If a field is not present in the source document, it is shown as “Not available in source document”. No missing value is treated as a confirmed company fact.</p>
+    <p><strong>Market data:</strong> Where shown, CMP, market capitalisation, beta and performance data are live market-data fields and may change after report generation.</p>
+    <p><strong>Risk warning:</strong> Investments in securities are subject to market risks. Read all relevant offer documents and risk disclosures carefully before making an investment decision.</p>
+    <p><strong>Internal-use notice:</strong> This report is an analytical output for internal review. It is not investment advice, a solicitation, or a substitute for independent professional advice.</p>
+    <div class="disclaimer-footer">Source-Verified Financial Analysis &nbsp;|&nbsp; Confidential — For Internal Use Only</div>
+  </div>
+
+</div>
+
+</body>
+</html>

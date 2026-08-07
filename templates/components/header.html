@@ -1,0 +1,18 @@
+<div class="header-block">
+    <table style="width: 100%;">
+        <tr>
+            <td>
+                {% set clean_name = report.company.name if report.company.name else 'Company Report' %}
+                {% if 'annotation=' in clean_name or 'FieldInfo' in clean_name %}
+                    {% set clean_name = 'Unknown Company' %}
+                {% endif %}
+                <div class="header-company">{{ clean_name }}</div>
+                <div class="header-sector">{{ report.company.sector if report.company.sector else 'Sector N/A' }}</div>
+            </td>
+            <td style="text-align: right;">
+                <div style="font-size: 14pt; color: #00234b; font-weight: bold;">EQUITY RESEARCH</div>
+                <div style="font-size: 9pt; color: #777;">{{ report.company.report_date if report.company.report_date else 'Generated Report' }}</div>
+            </td>
+        </tr>
+    </table>
+</div>

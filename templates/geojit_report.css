@@ -1,0 +1,486 @@
+/* Source-Verified Equity Research — CSS
+   Reference layout: Eternal Limited Q1FY26 sample
+   Palette: #1f5aa6 blue, #000 black, #f2f4f8 light-grey, #e74c3c red
+   Font: Arial/Helvetica — clean reference-inspired layout */
+
+@page {
+  size: A4;
+  margin: 1.0cm 1.1cm 1.1cm 1.1cm;
+  @bottom-right {
+    content: "Page " counter(page) " of " counter(pages);
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: 6.5pt;
+    color: #777;
+  }
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: Arial, Helvetica, 'Helvetica Neue', sans-serif;
+  font-size: 7.5pt;
+  color: #000;
+  line-height: 1.35;
+  background: #fff;
+  padding-bottom: 18px;
+}
+
+.geojit-brand {
+  position: fixed;
+  top: 7px;
+  right: 18px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: #1f5aa6;
+  font-weight: bold;
+  font-size: 12pt;
+  line-height: 1;
+  white-space: nowrap;
+  z-index: 5;
+}
+.brand-mark, .footer-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  background: #1f5aa6;
+  color: #fff;
+  border-radius: 1px;
+  font-size: 14pt;
+  font-weight: normal;
+}
+.brand-word small {
+  display: block;
+  font-size: 4.8pt;
+  letter-spacing: 0.2px;
+  text-align: right;
+  font-weight: normal;
+}
+.vertical-update-tab {
+  /* The period is already printed in the header and table columns. Hiding this
+     floating decoration prevents Chromium from repeating it over page tables. */
+  display: none;
+  right: 0;
+  top: 27%;
+  width: 21px;
+  padding: 8px 3px;
+  background: #1f5aa6;
+  color: #fff;
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+  border-radius: 5px 0 0 5px;
+  font-size: 6pt;
+  font-weight: bold;
+  text-align: center;
+  z-index: 5;
+}
+.ai-scenario-box {
+  margin: 4px 0 6px;
+  padding: 4px 5px;
+  background: #f2f6f6;
+  border-left: 2px solid #1f5aa6;
+  font-size: 6.2pt;
+  line-height: 1.25;
+}
+.ai-scenario-box span { color: #666; font-style: italic; }
+.sample-footer {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 14px;
+  background: #1f5aa6;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  font-size: 6.5pt;
+  z-index: 5;
+}
+.footer-mark { width: 13px; height: 13px; font-size: 9pt; border-radius: 50%; }
+.top-bar { padding-right: 150px; padding-top: 3px; }
+
+/* ── Top bar ─────────────────────────────────────── */
+.top-bar {
+  width: 100%;
+  border-bottom: 1.5px solid #1f5aa6;
+  padding-bottom: 3px;
+  margin-bottom: 6px;
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+.geojit-url  { font-size: 7pt; color: #555; font-style: italic; }
+.report-type { font-size: 8pt; font-weight: bold; color: #1f5aa6; }
+.top-date    { font-size: 7pt; color: #555; }
+
+/* ── PAGE 1 two-column layout: main LEFT, sidebar RIGHT ── */
+.p1-layout {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+.p1-layout > tbody > tr > td { vertical-align: top; padding: 0; }
+.p1-main    { width: 63%; padding-right: 12px; }
+.p1-sidebar { width: 37%; padding-left: 10px; border-left: 1px solid #ccc; }
+
+/* Company name + rating row on main column */
+.name-rating-row { width: 100%; border-collapse: collapse; margin-bottom: 5px; }
+.nr-name {
+  font-size: 17pt;
+  font-weight: bold;
+  color: #000;
+  border-bottom: 2px solid #1f5aa6;
+  padding-bottom: 3px;
+}
+.nr-badge { text-align: right; vertical-align: middle; width: 110px; }
+.p1-price-chart {
+  width: 100%;
+  height: auto;
+  border: 1px solid #eee;
+  margin: 4px 0 8px 0;
+}
+
+/* Analyst box at bottom of sidebar */
+.analyst-box {
+  margin-top: 10px;
+  padding: 5px 7px;
+  border: 1px solid #1f5aa6;
+  background: #eaf4f3;
+  font-size: 6.8pt;
+  color: #333;
+  line-height: 1.4;
+}
+
+/* Bottom teal contact banner */
+.bottom-banner {
+  margin-top: 12px;
+  background: #1f5aa6;
+  color: #fff;
+  font-size: 7pt;
+  font-weight: bold;
+  text-align: center;
+  padding: 5px 0;
+  letter-spacing: 0.3px;
+}
+
+/* ── Sidebar: company name + badge ───────────────── */
+.sb-company-name {
+  font-size: 18pt;
+  font-weight: bold;
+  color: #000;
+  line-height: 1.15;
+  margin-bottom: 6px;
+  border-bottom: 2px solid #1f5aa6;
+  padding-bottom: 3px;
+}
+.rec-badge {
+  display: inline-block;
+  font-size: 13pt;
+  font-weight: bold;
+  color: #fff;
+  padding: 4px 18px;
+  border-radius: 3px;
+  margin-bottom: 5px;
+  min-width: 90px;
+  text-align: center;
+}
+.rec-buy        { background: #1a7a3c; }
+.rec-hold       { background: #e67e00; }
+.rec-sell,
+.rec-reduce     { background: #c0392b; }
+.rec-accumulate { background: #1a5c8a; }
+.rec-nr,
+.rec-not        { background: #666; }
+
+/* Negative values in tables / price box */
+.neg, .neg-val { color: #c62828; font-weight: 600; }
+
+/* rec mini-table */
+.rec-mini-table { width: 100%; border-collapse: collapse; font-size: 7pt; margin-bottom: 5px; }
+.rec-mini-table td { padding: 1px 2px; color: #333; }
+.rec-mini-table td:last-child { text-align: right; font-weight: bold; color: #000; }
+
+/* Key changes */
+.key-changes-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 6.5pt;
+  background: #f2f3f4;
+  margin-bottom: 8px;
+}
+.key-changes-table th, .key-changes-table td {
+  padding: 2px 4px;
+  text-align: center;
+  border: 1px solid #ddd;
+}
+.key-changes-table th { background: #1f5aa6; color: #fff; font-weight: bold; }
+
+/* Sidebar section headings + table */
+.sb-heading {
+  background: #1f5aa6;
+  color: #fff;
+  font-weight: bold;
+  font-size: 7.5pt;
+  padding: 2px 5px;
+  margin-top: 7px;
+  margin-bottom: 0;
+}
+.sb-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 6.8pt;
+  margin-bottom: 2px;
+}
+.sb-table td, .sb-table th {
+  padding: 1.5px 5px;
+  border-bottom: 1px solid #eee;
+}
+.sb-table td:last-child, .sb-table th:not(:first-child) {
+  text-align: right;
+  font-weight: bold;
+}
+.sb-table th { background: #eaf4f3; color: #000; font-weight: bold; text-align: right; }
+.sb-table th:first-child { text-align: left; }
+.sb-table tr:nth-child(even) { background: #f9fafa; }
+.sh-table td, .sh-table th { font-size: 6.5pt; }
+.na-note { font-size: 6.5pt; color: #888; font-style: italic; margin: 3px 0; }
+
+/* ── Main content ────────────────────────────────── */
+.subtitle-line {
+  font-size: 11pt;
+  font-weight: bold;
+  color: #1f5aa6;
+  margin-bottom: 7px;
+  line-height: 1.2;
+}
+.biz-desc {
+  font-size: 8pt;
+  color: #000;
+  line-height: 1.45;
+  margin-bottom: 8px;
+  text-align: justify;
+}
+.highlights-list {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 10px 0;
+}
+.highlights-list li {
+  font-size: 8pt;
+  line-height: 1.4;
+  padding: 2px 0 2px 11px;
+  position: relative;
+  border-bottom: 1px dotted #ddd;
+  text-align: justify;
+}
+.highlights-list li::before {
+  content: "\2022";
+  position: absolute;
+  left: 0;
+  color: #1f5aa6;
+  font-size: 10pt;
+  line-height: 1.1;
+}
+.section-heading {
+  font-size: 9pt;
+  font-weight: bold;
+  color: #1f5aa6;
+  border-bottom: 1.5px solid #1f5aa6;
+  padding-bottom: 2px;
+  margin: 9px 0 5px 0;
+  page-break-after: avoid;
+  break-after: avoid;
+}
+.narrative-text {
+  font-size: 8pt;
+  line-height: 1.45;
+  color: #000;
+  text-align: justify;
+  margin-bottom: 8px;
+}
+
+/* ── Data tables (used everywhere) ──────────────── */
+table.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 7.5pt;
+  margin: 3px 0 10px 0;
+  page-break-inside: avoid;
+  break-inside: avoid;
+  page-break-before: avoid;
+}
+table.data-table th {
+  background: #1f5aa6;
+  color: #fff;
+  padding: 3px 5px;
+  text-align: right;
+  white-space: nowrap;
+  font-size: 7pt;
+  border-left: 1px solid rgba(255,255,255,0.3);
+}
+table.data-table th:first-child { text-align: left; border-left: none; }
+table.data-table td {
+  padding: 2px 5px;
+  text-align: right;
+  white-space: nowrap;
+  border-bottom: 1px solid #eee;
+}
+table.data-table td:first-child {
+  text-align: left;
+  font-weight: 600;
+}
+table.data-table tr:nth-child(even) td { background: #f5f6f6; }
+table.data-table tr.hl-row td { background: #e8f4f3; font-weight: bold; }
+table.data-table td.est-col,
+table.data-table th.est-col { background: #d4eeec; color: #00537a; font-style: italic; }
+table.data-table.compact { font-size: 7pt; }
+table.data-table.compact td, table.data-table.compact th { padding: 2px 4px; }
+
+/* ── Page break ──────────────────────────────────── */
+.page-break { page-break-before: always; }
+.full-page  { width: 100%; }
+
+/* ── Page 2: extended highlights + charts ───────── */
+.highlights-list-ext {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 12px 0;
+}
+.highlights-list-ext li {
+  font-size: 8pt;
+  line-height: 1.5;
+  padding: 3px 0 3px 11px;
+  position: relative;
+  border-bottom: 1px dotted #ddd;
+  text-align: justify;
+}
+.highlights-list-ext li::before {
+  content: "\2022";
+  position: absolute;
+  left: 0;
+  color: #1f5aa6;
+  font-size: 10pt;
+  line-height: 1.1;
+}
+.chart-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin: 6px 0 12px 0;
+}
+.chart-cell {
+  border: 1px solid #dde;
+  padding: 4px;
+  background: #fafafa;
+}
+.chart-cell-wide { grid-column: 1 / -1; }
+.chart-title {
+  font-size: 8pt;
+  font-weight: bold;
+  color: #1f5aa6;
+  margin-bottom: 3px;
+}
+.chart-img { width: 100%; height: auto; display: block; }
+.chart-grid .chart-img { max-height: 135px; object-fit: contain; }
+
+/* ── Page 3: 4-quadrant financials ──────────────── */
+.quadrant-outer {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  margin-top: 6px;
+}
+.quadrant-outer > tbody > tr > td.quadrant-cell {
+  width: 50%;
+  vertical-align: top;
+  padding: 0 8px 10px 0;
+}
+.quadrant-outer > tbody > tr > td.quadrant-cell:last-child { padding-right: 0; padding-left: 8px; }
+.quadrant-title {
+  font-size: 8.5pt;
+  font-weight: bold;
+  color: #000;
+  border-bottom: 1px solid #1f5aa6;
+  padding-bottom: 2px;
+  margin-bottom: 4px;
+}
+.data-unavailable {
+  padding: 12px 8px;
+  font-size: 6.5pt;
+  color: #777;
+  font-style: italic;
+  background: #f7f8f8;
+  border: 1px solid #e4e7e7;
+}
+.verify-stamp {
+  margin: 10px 0 6px 0;
+  padding: 5px 8px;
+  background: #eaf4f0;
+  border-left: 4px solid #1a7a3c;
+  font-size: 7.5pt;
+  color: #1a7a3c;
+  font-weight: bold;
+}
+.provenance-legend {
+  margin: 5px 0 8px 0;
+  padding: 4px 7px;
+  background: #f7f8f8;
+  border: 1px solid #dfe5e4;
+  color: #555;
+  font-size: 6pt;
+  line-height: 1.35;
+}
+.chart-period-note {
+  color:#777;
+  font-size:6.2pt;
+  font-style:italic;
+  margin:-4px 0 4px;
+}
+.snapshot-outer { margin-top: 4px; }
+.provenance-legend span { margin-right: 7px; white-space: nowrap; }
+.provenance-legend b { color: #006f68; }
+
+/* ── Page 4: disclaimer ──────────────────────────── */
+.disclaimer-header {
+  font-size: 8.5pt;
+  font-weight: bold;
+  color: #1f5aa6;
+  border-bottom: 1px solid #1f5aa6;
+  padding-bottom: 2px;
+  margin-bottom: 6px;
+  text-transform: uppercase;
+}
+.disclaimer-body { font-size: 6pt; color: #333; line-height: 1.25; }
+.disclaimer-body p { margin-bottom: 3px; text-align: justify; }
+.disclaimer-footer {
+  margin-top: 8px;
+  padding: 5px 7px;
+  background: #f2f3f4;
+  border: 1px solid #ccc;
+  font-size: 6pt;
+  color: #555;
+  line-height: 1.4;
+}
+
+/* Disclaimer note (italics below rating criteria table) */
+.disclaimer-note {
+  font-size: 6pt;
+  color: #555;
+  font-style: italic;
+  margin-bottom: 8px;
+  text-align: justify;
+  line-height: 1.3;
+}
+
+.p4-history-chart {
+  width: 43%;
+  max-height: 78px;
+  object-fit: contain;
+  object-position: left center;
+  display: block;
+  margin: 0 0 5px 0;
+  border: 1px solid #eee;
+}
