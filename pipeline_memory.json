@@ -1,8 +1,0 @@
-{
-    "known_issues": {
-        "missing_revenue_attempt_1": "Company uses 'Income from Operations' instead of 'Revenue'",
-        "missing_data_attempt_1": "Failed to extract complete revenue and PAT.",
-        "missing_data_attempt_2": "Failed to extract complete revenue and PAT."
-    },
-    "learned_strategies": {}
-}

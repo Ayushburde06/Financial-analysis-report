@@ -25,6 +25,10 @@ batch_outputs/
 outputs/
 *.log
 pipeline/_debug_report.html
+PDF/
+word/
+format/*.pdf
+pipeline_memory.json
 
 # OS
 Thumbs.db
