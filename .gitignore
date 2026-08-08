@@ -23,12 +23,20 @@ chroma_db/
 uploads/
 batch_outputs/
 outputs/
+
+# Logs
 *.log
+
+# Pipeline debug artefacts
 pipeline/_debug_report.html
+pipeline_memory.json
+
+# Generated / uploaded documents (PDFs, raw text, etc.)
 PDF/
 word/
 format/*.pdf
-pipeline_memory.json
+format/*.txt
+submission/reports/
 
 # OS
 Thumbs.db

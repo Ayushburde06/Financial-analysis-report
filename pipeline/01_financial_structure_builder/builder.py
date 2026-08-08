@@ -9,6 +9,7 @@ Supports three input formats:
 All three paths produce an identical MasterDocument output so every
 downstream stage (02-15) works without any modification.
 """
+import os
 from pathlib import Path
 import re
 from dom_schema import MasterDocument, SectionNode, ParagraphNode
@@ -67,19 +68,31 @@ def _parse_csv(file_path: str) -> str:
 def _extract_pdf_text_locally(file_path: str) -> str:
     """Extract selectable PDF text locally while retaining page markers."""
     try:
-        import pdfplumber
+        import fitz
         chunks = []
-        with pdfplumber.open(file_path) as pdf:
-            for page_num, page in enumerate(pdf.pages, start=1):
-                text = page.extract_text(x_tolerance=2, y_tolerance=3) or ""
+        with fitz.open(file_path) as pdf:
+            for page_num, page in enumerate(pdf, start=1):
+                text = page.get_text("text") or ""
                 if text.strip():
                     chunks.append(
                         f"<!--PAGE_BREAK page={page_num}-->\n{text.strip()}"
                     )
         return "\n\n".join(chunks)
-    except Exception as exc:
-        print(f"     [Stage 01] Local PDF text extraction failed: {exc}")
-        return ""
+    except Exception as fitz_exc:
+        try:
+            import pdfplumber
+            chunks = []
+            with pdfplumber.open(file_path) as pdf:
+                for page_num, page in enumerate(pdf.pages, start=1):
+                    text = page.extract_text(x_tolerance=2, y_tolerance=3) or ""
+                    if text.strip():
+                        chunks.append(
+                            f"<!--PAGE_BREAK page={page_num}-->\n{text.strip()}"
+                        )
+            return "\n\n".join(chunks)
+        except Exception as exc:
+            print(f"     [Stage 01] Local PDF text extraction failed: {fitz_exc}; {exc}")
+            return ""
 
 
 _PAGE_BREAK_PATTERN = re.compile(r'<!--PAGE_BREAK(?: page=(\d+))?-->')
@@ -116,21 +129,53 @@ class FinancialStructureBuilder:
             return doc
 
         # ── PDF (default) — Azure Document Intelligence ───────────────────────
-        print(f"     [Stage 01] Extracting PDF with Azure Document Intelligence: {file_path}")
-        content = extract_pdf_azure_di(file_path)
-        total_chars = len(content) if content else 0
-        print(f"     [Azure DI] Total text extracted: {total_chars:,} chars")
-
-        if not content or total_chars < 100:
-            print("     [Stage 01] Cloud OCR returned no usable text; trying local PDF extraction...")
+        # Prefer fast local extraction for selectable PDFs. Scanned PDFs still
+        # use Azure OCR when local extraction returns no usable text.
+        content = ""
+        total_chars = 0
+        # OCR-first is the default because it preserves layout, tables, and
+        # chart/figure text more faithfully. Set PREFER_LOCAL_PDF_TEXT=1 only
+        # when speed is preferred for selectable, text-heavy PDFs.
+        if os.getenv("PREFER_LOCAL_PDF_TEXT", "0") != "0":
+            print(f"     [Stage 01] Checking for selectable PDF text locally: {file_path}")
             content = _extract_pdf_text_locally(file_path)
             total_chars = len(content) if content else 0
             print(f"     [Local PDF] Total text extracted: {total_chars:,} chars")
-            if not content or total_chars < 100:
-                raise ValueError(
-                    "All OCR methods failed and the PDF has no selectable text. "
-                    "Check OCR credentials or provide a text-based PDF."
-                )
+
+        if not content or total_chars < 100:
+            # Fast default: one Azure layout-OCR request for the complete PDF.
+            # Azure returns page markers, so downstream retrieval still chunks
+            # the document per page without locally splitting/rendering pages.
+            print(f"     [Stage 01] Extracting PDF with Azure Document Intelligence: {file_path}")
+            content = extract_pdf_azure_di(file_path)
+            total_chars = len(content) if content else 0
+            print(f"     [Azure DI] Total text extracted: {total_chars:,} chars")
+
+            # Optional high-detail fallback for difficult chart-heavy scans.
+            # It requires PyMuPDF only when explicitly enabled and is not part
+            # of the normal fast path.
+            if (not content or total_chars < 100) and os.getenv("PER_PAGE_OCR", "0") != "0" and os.getenv("AZURE_MISTRAL_OCR_KEY"):
+                try:
+                    from pipeline.utils.mistral_ocr import (
+                        extract_pdf_per_page_parallel,
+                        format_per_page_content,
+                    )
+                    print(f"     [Stage 01] Azure OCR was sparse; running optional per-page OCR: {file_path}")
+                    page_texts = extract_pdf_per_page_parallel(
+                        file_path,
+                        max_workers=max(1, int(os.getenv("OCR_MAX_WORKERS", "5"))),
+                    )
+                    content = format_per_page_content(page_texts)
+                    total_chars = len(content) if content else 0
+                    print(f"     [Mistral OCR] Per-page total: {total_chars:,} chars")
+                except Exception as exc:
+                    print(f"     [Mistral OCR] Optional per-page OCR failed: {exc}")
+
+        if not content or total_chars < 100:
+            raise ValueError(
+                "All OCR methods failed and the PDF has no selectable text. "
+                "Check OCR credentials or provide a text-based PDF."
+            )
 
         print("     [Stage 01] Parsing per-page OCR response into MasterDocument DOM...")
         master_doc = MasterDocument(source_file=file_path)

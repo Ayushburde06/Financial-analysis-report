@@ -18,6 +18,10 @@ try:
     _REQUEST_TIMEOUT = int(os.getenv("LLM_REQUEST_TIMEOUT", "60"))
 except ValueError:
     _REQUEST_TIMEOUT = 60
+try:
+    _MAX_ATTEMPTS = max(1, int(os.getenv("LLM_MAX_ATTEMPTS", "2")))
+except ValueError:
+    _MAX_ATTEMPTS = 2
 
 # ── Azure AI DeepSeek V4 Pro config ───────────────────────────────────────────
 _AZURE_ENDPOINT   = os.getenv("AZURE_DEEPSEEK_ENDPOINT", "https://pavanshevankar9295-7639-resource.openai.azure.com")
@@ -38,6 +42,12 @@ def call_azure_deepseek(system_prompt: str, user_prompt: str,
     Used for all narrative generation and claim verification.
     Falls back to Bedrock R1 if Azure is unavailable.
     """
+    # Do not spend network time retrying an unconfigured provider. The normal
+    # Bedrock fallback below remains available when it is configured.
+    if not _AZURE_API_KEY:
+        print("     [LLM Client] Azure DeepSeek key missing; using fallback directly.")
+        return call_bedrock_deepseek(system_prompt, user_prompt)
+
     url = (f"{_AZURE_ENDPOINT}/openai/deployments/{_AZURE_DEPLOYMENT}"
            f"/chat/completions?api-version={_AZURE_API_VER}")
 
@@ -54,7 +64,7 @@ def call_azure_deepseek(system_prompt: str, user_prompt: str,
         "temperature": temperature,
     }
 
-    max_attempts = 5
+    max_attempts = _MAX_ATTEMPTS
     base_delay   = 5
 
     for attempt in range(1, max_attempts + 1):
@@ -128,7 +138,7 @@ def call_bedrock_deepseek(system_prompt: str, user_prompt: str) -> str:
         "temperature": 0.3,
     }
 
-    max_attempts = 5
+    max_attempts = _MAX_ATTEMPTS
     base_delay   = 10
 
     for attempt in range(1, max_attempts + 1):
@@ -199,7 +209,7 @@ def call_gpt5_mini(system_prompt: str, user_prompt: str,
     if json_mode:
         payload["response_format"] = {"type": "json_object"}
 
-    max_attempts = 3
+    max_attempts = _MAX_ATTEMPTS
     for attempt in range(1, max_attempts + 1):
         try:
             print(f"     [LLM Client] Calling GPT-5-mini via Azure [Attempt {attempt}/{max_attempts}]...")

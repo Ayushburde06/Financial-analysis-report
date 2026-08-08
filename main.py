@@ -133,6 +133,15 @@ ALLOWED_UPLOAD_EXTENSIONS = {".pdf", ".csv", ".txt", ".text", ".md"}
 MAX_UPLOAD_BYTES = int(os.getenv("MAX_UPLOAD_MB", "50")) * 1024 * 1024
 
 
+@app.get("/favicon.ico", include_in_schema=False)
+async def favicon():
+    """Serve favicon to prevent 404 console errors."""
+    favicon_path = os.path.join(STATIC_DIR, "favicon.ico")
+    if os.path.exists(favicon_path):
+        return FileResponse(favicon_path, media_type="image/x-icon")
+    raise HTTPException(status_code=404)
+
+
 @app.get("/", response_class=HTMLResponse)
 async def serve_ui():
     """Serve the frontend upload UI."""

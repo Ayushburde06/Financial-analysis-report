@@ -303,7 +303,11 @@ class PDFRenderer:
                 page = await browser.new_page()
                 file_url = f"file:///{temp_html_path.replace(os.sep, '/')}"
                 await page.goto(file_url, wait_until="networkidle")
-                await page.wait_for_timeout(2000)
+                # All charts and CSS are embedded in the generated HTML, so a
+                # short settle period is sufficient and avoids an unnecessary
+                # two-second delay on every report.
+                settle_ms = max(0, int(os.getenv("PDF_RENDER_SETTLE_MS", "500")))
+                await page.wait_for_timeout(settle_ms)
                 await page.pdf(
                     path=final_output_path,
                     format="A4",

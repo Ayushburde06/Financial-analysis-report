@@ -2,7 +2,12 @@ FROM mcr.microsoft.com/playwright/python:v1.48.0-jammy
 
 WORKDIR /app
 ENV PYTHONUNBUFFERED=1 \
-    PORT=8000
+    PORT=8000 \
+    ENVIRONMENT=production \
+    PREFER_LOCAL_PDF_TEXT=0 \
+    PER_PAGE_OCR=0 \
+    LLM_MAX_ATTEMPTS=2 \
+    PDF_RENDER_SETTLE_MS=500
 
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
