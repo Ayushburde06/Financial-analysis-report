@@ -1,0 +1,15 @@
+# Ignore Python files so Vercel doesn't try to run them as serverless functions
+*.py
+*.pyc
+__pycache__
+.venv
+.venv-clean
+pipeline/
+scripts/
+uploads/
+outputs/
+tmp/
+PDF/
+*.json
+!vercel.json
+requirements.txt
