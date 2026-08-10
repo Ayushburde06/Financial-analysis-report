@@ -2,8 +2,8 @@
   "version": 2,
   "rewrites": [
     {
-      "source": "/:path*",
-      "destination": "http://98.91.196.73/:path*"
+      "source": "/(.*)",
+      "destination": "http://98.91.196.73/$1"
     }
   ]
 }
