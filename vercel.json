@@ -3,7 +3,7 @@
   "rewrites": [
     {
       "source": "/(.*)",
-      "destination": "http://98.91.196.73/$1"
+      "destination": "http://98.91.196.73.nip.io/$1"
     }
   ]
 }
