@@ -8,6 +8,8 @@ Repository: [Financial-analysis-report](https://github.com/Ayushburde06/Financia
 
 [Open the live application](https://financial-analysis-report.vercel.app/)
 
+The live demo processes one report at a time and limits PDFs to 30 pages because OCR, analysis, and PDF rendering use significant CPU and memory. Large or scanned PDFs may take longer, time out, or produce a less complete run under resource pressure. For the most reliable report-quality evaluation, clone the repository and run the pipeline locally.
+
 ### Submission reports
 
 1. **ICICI Q2FY26**: [generated PDF](submission/reports/ICICI%20Q2FY26_Geojit_Report.pdf) - source path: `PDF/ICICI Q2FY26.pdf`
