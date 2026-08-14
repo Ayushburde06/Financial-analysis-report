@@ -22,6 +22,10 @@ _check_imgs/
 chroma_db/
 uploads/
 batch_outputs/
+b1/
+b2/
+b3/
+b4/
 outputs/
 
 # Logs
@@ -30,6 +34,10 @@ outputs/
 # Pipeline debug artefacts
 pipeline/_debug_report.html
 pipeline_memory.json
+_report_audit.json
+*.bak
+*.orig
+*.tmp
 
 # Generated / uploaded documents (PDFs, raw text, etc.)
 PDF/

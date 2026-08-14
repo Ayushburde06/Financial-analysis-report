@@ -18,6 +18,11 @@ class VerifiedNumber(BaseModel):
     is_estimate: bool = False # True if [E]
 
 class FinancialLineItem(BaseModel):
+    # Dynamic annual storage — captures ANY fiscal year (FY20, FY21, FY26A, etc.)
+    # Keys are normalized year labels like "fy20", "fy21", "fy22", ... "fy26a", etc.
+    annual: Dict[str, VerifiedNumber] = Field(default_factory=dict)
+
+    # Backward-compatible fixed fields (still populated for legacy code paths)
     fy22: VerifiedNumber = Field(default_factory=lambda: VerifiedNumber(value="[N/A]"))
     fy23: VerifiedNumber = Field(default_factory=lambda: VerifiedNumber(value="[N/A]"))
     fy24: VerifiedNumber = Field(default_factory=lambda: VerifiedNumber(value="[N/A]"))
@@ -28,6 +33,48 @@ class FinancialLineItem(BaseModel):
     q_prev_year: VerifiedNumber = Field(default_factory=lambda: VerifiedNumber(value="[N/A]")) # e.g. Q2FY25
     q_prev_qtr: VerifiedNumber = Field(default_factory=lambda: VerifiedNumber(value="[N/A]"))  # e.g. Q1FY26
     q_current: VerifiedNumber = Field(default_factory=lambda: VerifiedNumber(value="[N/A]"))   # e.g. Q2FY26
+
+    def get_annual_value(self, year_key: str) -> VerifiedNumber:
+        """Retrieve a value by year key (e.g. 'fy22', 'fy26a') from fixed fields or dynamic dict."""
+        key = str(year_key or "").lower().strip()
+        if hasattr(self, key) and isinstance(getattr(self, key), VerifiedNumber):
+            vn = getattr(self, key)
+            if vn.value != "[N/A]" and vn.value is not None:
+                return vn
+        return self.annual.get(key, VerifiedNumber(value="[N/A]"))
+
+    def numeric_at(self, year_key: str) -> Optional[float]:
+        vn = self.get_annual_value(year_key)
+        if vn and isinstance(vn.value, (int, float)):
+            return float(vn.value)
+        return None
+
+    def actual_year_values(self) -> Dict[str, float]:
+        """Numeric actuals only — estimate years (fyNNe) excluded."""
+        out: Dict[str, float] = {}
+        for yk in ("fy22", "fy23", "fy24", "fy25"):
+            val = self.numeric_at(yk)
+            if val is not None:
+                out[yk] = val
+        for yk, vn in (self.annual or {}).items():
+            low = str(yk).lower()
+            if low.endswith("e"):
+                continue
+            if vn and isinstance(vn.value, (int, float)):
+                out[low] = float(vn.value)
+        return out
+
+    def all_annual_years(self) -> list:
+        """Return sorted list of all year keys that have non-N/A values."""
+        years = set()
+        for yk in ("fy22", "fy23", "fy24", "fy25", "fy26e", "fy27e"):
+            v = getattr(self, yk, None)
+            if v and v.value != "[N/A]" and v.value is not None:
+                years.add(yk)
+        for yk, v in (self.annual or {}).items():
+            if v.value != "[N/A]" and v.value is not None:
+                years.add(yk)
+        return sorted(years)
 
 # ---------------------------------------------------------
 # Core Financial Statements (For Agent 1: Financial Analyst)
@@ -77,7 +124,12 @@ class FinancialAnalystEvidence(BaseModel):
     pl: ProfitAndLossPacket
     bs: BalanceSheetPacket
     cf: CashFlowPacket
-    banking_metrics: Optional[Dict[str, Any]] = None  # NIM, GNPA, NNPA, CASA, etc.
+    banking_metrics: Optional[Dict[str, Any]] = None  # extra source metrics (NIM, capacity, …)
+    industry: str = ""
+    period_label: str = ""
+    source_unit: str = ""
+    business_facts: List[str] = Field(default_factory=list)
+    risk_facts: List[str] = Field(default_factory=list)
 
 # ---------------------------------------------------------
 # Growth Metrics (For Agent 2: Growth Analyst)

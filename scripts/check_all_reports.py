@@ -3,12 +3,11 @@ import fitz
 import re
 from pathlib import Path
 
-REPORTS = [
-    "outputs/ICICI Q2FY26_Geojit_Report.pdf",
-    "outputs/LTTS Q2FY26_Geojit_Report.pdf",
-    "outputs/POCL Q2FY26_Geojit_Report.pdf",
-    "outputs/JSW Energy Q2FY26_Geojit_Report.pdf",
-]
+REPORTS = sorted(
+    str(path)
+    for path in Path("outputs").glob("*.pdf")
+    if path.name.endswith(("_Equity_Report.pdf", "_Geojit_Report.pdf"))
+)
 
 BAD_PATTERNS = ["+% YoY", "grew + YoY", "[VERIFIED]", "[N/A]", "KEY_HIGHLIGHTS", "0.0%"]
 
@@ -44,7 +43,7 @@ def numeric_cells(lines):
 
 
 for path in REPORTS:
-    name = Path(path).stem.replace("_Geojit_Report", "")
+    name = Path(path).stem.replace("_Equity_Report", "").replace("_Geojit_Report", "")
     print(f"\n{'='*60}")
     print(f"  {name}")
     print(f"{'='*60}")

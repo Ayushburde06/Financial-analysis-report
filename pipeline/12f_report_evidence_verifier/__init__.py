@@ -1,0 +1,1 @@
+"""Pre-render evidence and chart quality gate."""

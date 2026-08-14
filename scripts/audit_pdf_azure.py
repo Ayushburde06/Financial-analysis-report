@@ -486,9 +486,13 @@ def audit(report_pdf: str, source_pdf: str = None) -> Dict:
 
 
 def audit_all():
-    reports = sorted(Path("outputs").glob("*_Geojit_Report.pdf"))
+    reports = sorted(
+        path
+        for path in Path("outputs").glob("*.pdf")
+        if path.name.endswith(("_Equity_Report.pdf", "_Geojit_Report.pdf"))
+    )
     if not reports:
-        print(red("No *_Geojit_Report.pdf files found in outputs/"))
+        print(red("No generated report PDFs found in outputs/"))
         return
 
     scores = {}

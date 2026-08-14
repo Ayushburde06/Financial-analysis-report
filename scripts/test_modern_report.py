@@ -127,8 +127,32 @@ async def main():
     enriched = stage_13c.enrich_report(narratives, evidence.model_dump())
 
     source_ctx = {
+        "company": importlib.import_module("schema").CompanyInfo(
+            name=evidence.company_name,
+            sector="Engineering & Technology Services",
+            report_date="August 13, 2026",
+            period="Q2FY26",
+        ),
         "industry": "Engineering & Technology Services",
         "report_period": "Q2 FY26",
+        "business_description": enriched["business_analysis"],
+        "outlook_valuation": enriched["investment_thesis"],
+        "key_highlights": [
+            "Growth evidence: record deal wins and strong segment performance.",
+            "Profitability evidence: margin expansion and cost discipline.",
+            "Risk evidence: macro headwinds in Europe and client concentration.",
+        ],
+        "source_coverage": {
+            "source": "synthetic-ltts-source.pdf",
+            "verified_count": 18,
+            "total_count": 20,
+            "method": "synthetic source fixture",
+        },
+        "recommendation": importlib.import_module("schema").RecommendationNode(
+            action="ACCUMULATE", cmp=5420.0, target_price=6200.0,
+            expected_return_pct=14.4,
+            rationale=enriched["investment_thesis"],
+        ),
         "valuation_data": {
             "valuation": {
                 "cmp": 5420.0,

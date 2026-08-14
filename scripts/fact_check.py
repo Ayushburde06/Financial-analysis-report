@@ -260,10 +260,12 @@ if __name__ == "__main__":
             
             master_doc = stage_01.FinancialStructureBuilder.run(upload_path)
             kg = stage_02.KnowledgeBuilder.run(master_doc)
-            kpis = stage_03.KPIDiscoveryEngine.run(kg)
+            kpis = stage_03.KPIDiscoveryEngine.run(kg, master_doc.get_full_text())
             coverage = stage_04.CoverageAnalyzer.run(master_doc, kpis)
-            industry = stage_05.IndustryDetectionEngine.run(kg, master_doc.get_full_text())
-            plan = stage_06.AdaptiveAnalysisPlanner.run(industry, coverage)
+            industry = stage_05.IndustryDetectionEngine.run(
+                kg, master_doc.get_full_text(), kpis=kpis
+            )
+            plan = stage_06.AdaptiveAnalysisPlanner.run(industry, coverage, kpis=kpis)
             
             retriever = stage_08.HybridRetriever(plan, master_doc)
             raw_financials = None
@@ -279,7 +281,12 @@ if __name__ == "__main__":
             clean_stem = re.sub(r'^[a-f0-9\-]{36}_?', '', Path(safe_filename).stem)
             company_name = clean_stem.replace("_"," ").split(" Q2")[0].split(" Q1")[0].strip() or "LTTS"
             
-            fa_evidence = stage_10.EvidenceBuilder.build_financial_evidence(raw_financials, company_name=company_name)
+            fa_evidence = stage_10.EvidenceBuilder.build_financial_evidence(
+                raw_financials,
+                company_name=company_name,
+                industry=industry,
+                extra_keys=kpis,
+            )
             
             # Save evidence for reference
             with open("evidence_debug.json", "w") as f:

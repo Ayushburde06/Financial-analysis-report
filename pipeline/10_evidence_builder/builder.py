@@ -1,11 +1,13 @@
 """
 Stage 10: Evidence Builder
 
-FIX: Was hardcoded to look for 'revenue', 'ebitda' etc.
-     Banking reports don't have these — they have 'nii', 'nim', 'advances' etc.
-     Now uses sector-aware field mapping so bank reports are handled correctly.
+Maps this filing's extracted JSON onto the Geojit evidence packets.
+Uses the sector config for this industry, then any other numbered line
+items from the source. Missing stays empty. No invented fields.
 """
-from typing import Dict, Any
+from typing import Any, Dict, Iterable, List, Optional, Sequence
+import re
+
 import importlib
 
 quant_engine_module = importlib.import_module("pipeline.09_quant_engine.engine")
@@ -22,146 +24,206 @@ CashFlowPacket = evidence_packets.CashFlowPacket
 
 from .failure_analyzer import FailureAnalyzerAgent
 
+_SKIP_EXTRA = {
+    "period_labels", "unit", "currency", "notes", "commentary",
+    "segments", "segment_revenue", "segment_breakdown", "geo", "geography",
+}
+
+
+def _has_number(value: Any) -> bool:
+    if value is None or isinstance(value, bool):
+        return False
+    if isinstance(value, (int, float)):
+        return True
+    try:
+        float(str(value).replace(",", "").strip())
+        return str(value).strip() not in ("", "—", "None", "null")
+    except (TypeError, ValueError):
+        return False
+
 
 def _resolve(raw_data: Dict[str, Any], *keys: str) -> Dict[str, Any]:
-    """
-    Try each key in order, return the first one found with numeric data.
-    Falls back to empty dict so QuantEngine.build_financial_line_item gets a safe input.
-    """
     for key in keys:
+        if not key:
+            continue
         val = raw_data.get(key)
-        if isinstance(val, dict) and any(
-            isinstance(v, (int, float)) and v is not None
-            for v in val.values()
-        ):
+        if isinstance(val, dict) and any(_has_number(v) for v in val.values()):
             return val
     return {}
 
 
-class EvidenceBuilder:
+def _unique(keys: Iterable[str]) -> List[str]:
+    seen: List[str] = []
+    for key in keys:
+        token = str(key or "").strip()
+        if token and token not in seen:
+            seen.append(token)
+    return seen
 
+
+def _line(raw: Dict[str, Any], name: str, *keys: str, project: bool = False):
+    payload = _resolve(raw, *keys)
+    item = QuantEngine.build_financial_line_item(payload, name)
+    if project:
+        item = ForwardProjector.project_next_two_years(name, item)
+    return item
+
+
+class EvidenceBuilder:
     @staticmethod
     def build_financial_evidence(
-        raw_data: Dict[str, Any], company_name: str
+        raw_data: Dict[str, Any],
+        company_name: str,
+        industry: str = "",
+        extra_keys: Optional[Sequence[str]] = None,
     ) -> FinancialAnalystEvidence:
-        print("     [Evidence Builder] Validating & Wrapping raw financials into Pydantic schemas...")
+        print("     [Evidence Builder] Wrapping source financials into evidence packets...")
+        raw = raw_data if isinstance(raw_data, dict) else {}
+        extra_keys = list(extra_keys or [])
 
-        # ── Self-Improving Retry Loop ────────────────────────────────────────
-        max_attempts = 3
-        for attempt in range(1, max_attempts + 1):
-            score = FailureAnalyzerAgent.score_extraction(raw_data)
-            if score >= 0.5:   # Accept partial data (0.5+) to avoid false failures
-                print(f"     [Evidence Builder] Extraction validation passed (Score: {score}).")
-                break
-            else:
-                if attempt < max_attempts:
-                    raw_data = FailureAnalyzerAgent.analyze_and_retry(raw_data, attempt)
-                else:
-                    print("     [Evidence Builder] Max retries reached. Proceeding with available data.")
-        # ────────────────────────────────────────────────────────────────────
+        from pipeline.sectors import get_sector_config
+        cfg = get_sector_config(industry or "")
 
-        # ── P&L Packet — sector-aware field resolution ────────────────────
-        # Banking: revenue = nii / net_interest_income
-        # NBFC:    revenue = aum or nii
-        # Others:  revenue = revenue / total_income / operating_revenue
-        rev_raw   = _resolve(raw_data,
-                             "revenue", "total_income", "operating_revenue",
-                             "nii", "net_interest_income", "aum")
-        ebitda_raw = _resolve(raw_data, "ebitda", "operating_profit", "ppop")
-        ebit_raw   = _resolve(raw_data, "ebit")
-        pbt_raw    = _resolve(raw_data, "pbt", "profit_before_tax")
-        pat_raw    = _resolve(raw_data, "pat", "net_profit", "profit_after_tax")
-        eps_raw    = _resolve(raw_data, "eps")
+        score = FailureAnalyzerAgent.score_extraction(raw, extra_keys=extra_keys)
+        print(f"     [Evidence Builder] Source coverage score={score}")
 
-        # New Granular P&L items
-        depreciation_raw = _resolve(raw_data, "depreciation", "amortization")
-        interest_raw     = _resolve(raw_data, "interest", "finance_costs")
-        other_income_raw = _resolve(raw_data, "other_income")
-        tax_raw          = _resolve(raw_data, "tax", "income_tax")
-        tax_rate_raw     = _resolve(raw_data, "tax_rate")
-
-        rev_item   = ForwardProjector.project_next_two_years(
-                        "revenue", QuantEngine.build_financial_line_item(rev_raw, "revenue"))
-        ebitda_item = ForwardProjector.project_next_two_years(
-                        "ebitda", QuantEngine.build_financial_line_item(ebitda_raw, "ebitda"))
-        ebit_item  = ForwardProjector.project_next_two_years(
-                        "ebit", QuantEngine.build_financial_line_item(ebit_raw, "ebit"))
-        pbt_item   = ForwardProjector.project_next_two_years(
-                        "pbt", QuantEngine.build_financial_line_item(pbt_raw, "pbt"))
-        pat_item   = ForwardProjector.project_next_two_years(
-                        "pat", QuantEngine.build_financial_line_item(pat_raw, "pat"))
-        eps_item   = ForwardProjector.project_next_two_years(
-                        "eps", QuantEngine.build_financial_line_item(eps_raw, "eps"))
+        rev_keys = _unique(list(cfg.revenue_keys or []) + [
+            "revenue", "total_income", "operating_revenue", "net_sales",
+            "nii", "net_interest_income",
+        ])
+        ebitda_keys = _unique(list(cfg.ebitda_keys or []) + [
+            "ebitda", "operating_profit", "ppop",
+        ])
+        pat_keys = _unique(list(cfg.pat_keys or []) + [
+            "pat", "net_profit", "profit_after_tax",
+        ])
+        asset_keys = _unique(list(cfg.assets_keys or []) + ["total_assets"])
+        liab_keys = _unique(list(cfg.liab_keys or []) + ["total_liabilities"])
+        equity_keys = _unique(list(cfg.equity_keys or []) + [
+            "total_equity", "net_worth", "shareholders_equity", "shareholders_funds",
+        ])
+        debt_keys = _unique(list(cfg.debt_keys or []) + ["total_debt", "borrowings"])
+        cash_keys = _unique(list(cfg.cash_keys or []) + ["cash_and_equivalents", "cash"])
 
         pl_packet = ProfitAndLossPacket(
-            revenue=rev_item, ebitda=ebitda_item, ebit=ebit_item,
-            pbt=pbt_item, pat=pat_item, eps=eps_item,
-            depreciation=QuantEngine.build_financial_line_item(depreciation_raw, "depreciation"),
-            interest=QuantEngine.build_financial_line_item(interest_raw, "interest"),
-            other_income=QuantEngine.build_financial_line_item(other_income_raw, "other_income"),
-            tax=QuantEngine.build_financial_line_item(tax_raw, "tax"),
-            tax_rate=QuantEngine.build_financial_line_item(tax_rate_raw, "tax_rate")
+            revenue=_line(raw, "revenue", *rev_keys, project=True),
+            ebitda=_line(raw, "ebitda", *ebitda_keys, project=True),
+            ebit=_line(raw, "ebit", "ebit", project=True),
+            pbt=_line(raw, "pbt", "pbt", "profit_before_tax", project=True),
+            pat=_line(raw, "pat", *pat_keys, project=True),
+            eps=_line(raw, "eps", "eps", project=True),
+            depreciation=_line(raw, "depreciation", "depreciation", "amortization"),
+            interest=_line(raw, "interest", "interest", "finance_costs"),
+            other_income=_line(raw, "other_income", "other_income"),
+            tax=_line(raw, "tax", "tax", "income_tax"),
+            tax_rate=_line(raw, "tax_rate", "tax_rate"),
         )
-
-        # ── Balance Sheet Packet ─────────────────────────────────────────────
-        # Banking: assets = advances + deposits proxy
-        assets_raw  = _resolve(raw_data, "total_assets", "advances")
-        liab_raw    = _resolve(raw_data, "total_liabilities", "deposits")
-        equity_raw  = _resolve(raw_data, "total_equity", "net_worth", "shareholders_fund", "shareholders_funds")
-        debt_raw    = _resolve(raw_data, "total_debt", "borrowings")
-        cash_raw    = _resolve(raw_data, "cash_and_equivalents", "cash")
-
-        # New Granular Balance Sheet items
-        ar_raw = _resolve(raw_data, "accounts_receivable", "debtors")
-        inv_raw = _resolve(raw_data, "inventories", "inventory")
-        investments_raw = _resolve(raw_data, "investments")
-        gfa_raw = _resolve(raw_data, "gross_fixed_assets", "fixed_assets")
-        cl_raw = _resolve(raw_data, "current_liabilities")
-        prov_raw = _resolve(raw_data, "provisions")
 
         bs_packet = BalanceSheetPacket(
-            total_assets       = QuantEngine.build_financial_line_item(assets_raw,  "total_assets"),
-            total_liabilities  = QuantEngine.build_financial_line_item(liab_raw,   "total_liabilities"),
-            total_equity       = QuantEngine.build_financial_line_item(equity_raw, "total_equity"),
-            total_debt         = QuantEngine.build_financial_line_item(debt_raw,   "total_debt"),
-            cash_and_equivalents = QuantEngine.build_financial_line_item(cash_raw, "cash_and_equivalents"),
-            accounts_receivable = QuantEngine.build_financial_line_item(ar_raw, "accounts_receivable"),
-            inventories = QuantEngine.build_financial_line_item(inv_raw, "inventories"),
-            investments = QuantEngine.build_financial_line_item(investments_raw, "investments"),
-            gross_fixed_assets = QuantEngine.build_financial_line_item(gfa_raw, "gross_fixed_assets"),
-            current_liabilities = QuantEngine.build_financial_line_item(cl_raw, "current_liabilities"),
-            provisions = QuantEngine.build_financial_line_item(prov_raw, "provisions")
+            total_assets=_line(raw, "total_assets", *asset_keys),
+            total_liabilities=_line(raw, "total_liabilities", *liab_keys),
+            total_equity=_line(raw, "total_equity", *equity_keys),
+            total_debt=_line(raw, "total_debt", *debt_keys),
+            cash_and_equivalents=_line(raw, "cash_and_equivalents", *cash_keys),
+            accounts_receivable=_line(raw, "accounts_receivable", "accounts_receivable", "debtors"),
+            inventories=_line(raw, "inventories", "inventories", "inventory"),
+            investments=_line(raw, "investments", "investments"),
+            gross_fixed_assets=_line(raw, "gross_fixed_assets", "gross_fixed_assets", "fixed_assets"),
+            current_liabilities=_line(raw, "current_liabilities", "current_liabilities"),
+            provisions=_line(raw, "provisions", "provisions"),
         )
-
-        # ── Cash Flow Packet ─────────────────────────────────────────────────
-        ocf_raw  = _resolve(raw_data, "operating_cash_flow")
-        icf_raw  = _resolve(raw_data, "investing_cash_flow")
-        fcf_raw  = _resolve(raw_data, "financing_cash_flow")
-        fcf2_raw = _resolve(raw_data, "free_cash_flow")
 
         cf_packet = CashFlowPacket(
-            operating_cash_flow  = QuantEngine.build_financial_line_item(ocf_raw,  "operating_cash_flow"),
-            investing_cash_flow  = QuantEngine.build_financial_line_item(icf_raw,  "investing_cash_flow"),
-            financing_cash_flow  = QuantEngine.build_financial_line_item(fcf_raw,  "financing_cash_flow"),
-            free_cash_flow       = QuantEngine.build_financial_line_item(fcf2_raw, "free_cash_flow"),
+            operating_cash_flow=_line(raw, "operating_cash_flow", "operating_cash_flow"),
+            investing_cash_flow=_line(raw, "investing_cash_flow", "investing_cash_flow"),
+            financing_cash_flow=_line(raw, "financing_cash_flow", "financing_cash_flow"),
+            free_cash_flow=_line(raw, "free_cash_flow", "free_cash_flow"),
         )
 
-        # ── Banking metrics (NIM, GNPA, etc.) — packaged for sector-specific tables ─
-        banking_metrics = None
-        banking_keys = ["nim", "gnpa", "nnpa", "pcr", "casa_ratio",
-                        "capital_adequacy", "tier1_ratio", "roe", "roa",
-                        "credit_growth", "slippage_ratio", "provision_expense",
-                        "advances", "deposits"]
-        if any(k in raw_data for k in banking_keys):
-            banking_metrics = {}
-            for k in banking_keys:
-                if k in raw_data and raw_data[k]:
-                    banking_metrics[k] = QuantEngine.build_financial_line_item(raw_data[k], k)
+        used = set(rev_keys + ebitda_keys + pat_keys + asset_keys + liab_keys
+                   + equity_keys + debt_keys + cash_keys)
+        used.update({
+            "ebit", "pbt", "profit_before_tax", "eps", "depreciation", "amortization",
+            "interest", "finance_costs", "other_income", "tax", "income_tax", "tax_rate",
+            "accounts_receivable", "debtors", "inventories", "inventory", "investments",
+            "gross_fixed_assets", "fixed_assets", "current_liabilities", "provisions",
+            "operating_cash_flow", "investing_cash_flow", "financing_cash_flow",
+            "free_cash_flow",
+        })
+
+        extra: Dict[str, Any] = {}
+        wanted = []
+        for _label, key in getattr(cfg, "extra_metrics", []) or []:
+            if key:
+                wanted.append(key)
+        wanted.extend(extra_keys)
+        for key in _unique(wanted):
+            payload = raw.get(key)
+            if QuantEngine._is_period_dict(payload):
+                extra[key] = QuantEngine.build_financial_line_item(payload, key)
+
+        for key, payload in raw.items():
+            if key in extra or key in used or key in _SKIP_EXTRA:
+                continue
+            if not QuantEngine._is_period_dict(payload):
+                continue
+            extra[key] = QuantEngine.build_financial_line_item(payload, key)
+            if len(extra) >= 24:
+                break
+
+        if extra:
+            print(f"     [Evidence Builder] Extra source metrics: {list(extra.keys())[:12]}")
 
         return FinancialAnalystEvidence(
             company_name=company_name,
             pl=pl_packet,
             bs=bs_packet,
             cf=cf_packet,
-            banking_metrics=banking_metrics,
+            banking_metrics=extra or None,
+            industry=industry or "",
         )
+
+
+def _plain_sentences(items: Any, limit: int = 4) -> List[str]:
+    """Keep filing sentences for narrative; drop printed numbers."""
+    out: List[str] = []
+    if isinstance(items, str):
+        items = [items]
+    for raw in items or []:
+        text = raw if isinstance(raw, str) else str(raw or "")
+        text = re.sub(r"Rs\.?\s*", " ", text, flags=re.I)
+        text = re.sub(r"[\d,]+(?:\.\d+)?%?", " ", text)
+        text = re.sub(r"\s+", " ", text).strip(" :-")
+        if len(text) < 40:
+            continue
+        out.append(text[:320])
+        if len(out) >= limit:
+            break
+    return out
+
+
+def attach_filing_context(
+    evidence: Any,
+    *,
+    industry: str = "",
+    knowledge: Optional[Dict[str, Any]] = None,
+    period_label: str = "",
+    source_unit: str = "",
+) -> Any:
+    """Attach this filing's activity/risk sentences for Stage 11."""
+    kg = knowledge if isinstance(knowledge, dict) else {}
+    facts = _plain_sentences(kg.get("strategy_and_highlights"))
+    facts += _plain_sentences(kg.get("management_commentary"), limit=2)
+    risks = _plain_sentences(kg.get("risks_and_challenges"), limit=3)
+    update = {
+        "industry": industry or getattr(evidence, "industry", "") or "",
+        "period_label": period_label or getattr(evidence, "period_label", "") or "",
+        "source_unit": source_unit or getattr(evidence, "source_unit", "") or "",
+        "business_facts": facts[:6],
+        "risk_facts": risks,
+    }
+    if hasattr(evidence, "model_copy"):
+        return evidence.model_copy(update=update)
+    for key, val in update.items():
+        setattr(evidence, key, val)
+    return evidence

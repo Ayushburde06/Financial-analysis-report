@@ -58,6 +58,12 @@ class SectionNode(BaseModel):
 class MasterDocument(BaseModel):
     """The root container for the parsed layout tree."""
     source_file: str
+    # Stable intermediate representation shared by OCR, extraction, and
+    # rendering stages. Keys are source page numbers as strings so the object
+    # remains JSON-friendly when cached or logged.
+    source_format: str = "unknown"
+    page_markdown: Dict[str, str] = Field(default_factory=dict)
+    source_metadata: Dict[str, Any] = Field(default_factory=dict)
     sections: List[SectionNode] = Field(default_factory=list)
     
     def get_full_text(self) -> str:

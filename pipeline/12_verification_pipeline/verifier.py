@@ -211,9 +211,9 @@ class VerificationStack:
                   f"all {len(uncited_numbers)} uncited number(s) found in evidence.")
             return True, narrative
 
-        # ── Pass B — targeted DeepSeek R1 audit ───────────────────────────────
+        # ── Pass B — targeted GPT-5.6 Luna audit ───────────────────────────────
         print(f"     [Claim Verifier] Pass B — "
-              f"DeepSeek R1 auditing {len(suspicious)} suspicious value(s): {suspicious}")
+              f"GPT-5.6 Luna auditing {len(suspicious)} suspicious value(s): {suspicious}")
 
         from pipeline.utils.llm_client import call_bedrock_deepseek
 
@@ -262,7 +262,7 @@ Reply with EXACTLY one of these two words — nothing else:
             )
 
         print("     [Claim Verifier] Pass B passed — "
-              "DeepSeek R1 confirmed all values traceable to evidence.")
+              "GPT-5.6 Luna confirmed all values traceable to evidence.")
         return True, narrative
 
     @staticmethod

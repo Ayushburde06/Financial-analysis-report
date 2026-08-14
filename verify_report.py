@@ -131,11 +131,10 @@ def verify_html_content(pdf_path):
     for row in ["Revenue", "PAT", "EPS"]:
         check(f"Quarterly row '{row}' present", row in full_text)
 
-    # Summary financials (Y.E March)
+    # Summary financials — years come from this filing, not FY25/FY26E/FY27E
     check("Summary financials (Y.E March) present", "Y.E March" in full_text or "Y.E" in full_text)
-    check("FY25 column present", "FY25" in full_text)
-    check("FY26E column present", "FY26E" in full_text)
-    check("FY27E column present", "FY27E" in full_text)
+    fy_hits = re.findall(r"FY\d{2,4}[AE]?", full_text)
+    check("Fiscal-year column present", bool(fy_hits), "No FY labels in PDF")
 
     # P&L table
     check("P&L / Profit & Loss present", "Profit" in full_text and "Loss" in full_text)

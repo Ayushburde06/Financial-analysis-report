@@ -10,11 +10,8 @@ from .base import SectorConfig
 class InternetRetailConfig(SectorConfig):
     sector_name: str = "Internet & Retail"
     sector_aliases: List[str] = field(default_factory=lambda: [
-        "internet", "e-commerce", "ecommerce", "quick commerce", "food delivery",
-        "online retail", "catalogue retail", "digital platform", "marketplace",
-        "zomato", "eternal", "swiggy", "nykaa", "meesho", "blinkit",
-        "hyperpure", "nov", "gross order value", "gov", "gmv",
-        "quick commerce", "d2c", "direct to consumer"
+        "internet", "e-commerce", "ecommerce", "quick commerce",
+        "food delivery", "online retail", "marketplace", "gmv",
     ])
 
     revenue_keys: List[str] = field(default_factory=lambda: [

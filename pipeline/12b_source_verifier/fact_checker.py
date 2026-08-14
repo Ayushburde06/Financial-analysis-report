@@ -267,8 +267,20 @@ class SourceFactChecker:
         unverified_list: List[FieldVerification] = []
 
         factor = float(source_value_factor or 1.0)
+        try:
+            import importlib
+            is_non_monetary_metric = importlib.import_module(
+                "pipeline.12d_unit_normalizer.unit_normalizer"
+            ).is_non_monetary_metric
+        except Exception:
+            def is_non_monetary_metric(_key: str) -> bool:
+                return False
+
         for field_path, value in flat_values:
-            source_value = value / factor if factor not in (0.0, 1.0) else value
+            # Non-monetary metrics are never million→crore scaled, so do not
+            # reverse-apply the unit factor when searching OCR.
+            apply_factor = factor not in (0.0, 1.0) and not is_non_monetary_metric(field_path)
+            source_value = value / factor if apply_factor else value
             found, snippet, matched_val = _search_ocr(source_value, ocr_text)
             fv = FieldVerification(
                 field_path=field_path,

@@ -322,8 +322,12 @@ class GeojitReportData(BaseModel):
     # Actionable Recommendation from Python Engine
     recommendation: RecommendationNode = Field(default_factory=RecommendationNode)
     
+    # Adaptive AI-driven sections — the AI decides what to render based on extracted data
+    sections: List["ReportSection"] = Field(default_factory=list)
+    
     # Appendix & Charts
     appendix: Dict[str, Any] = Field(default_factory=dict)
+    source_coverage: Dict[str, Any] = Field(default_factory=dict)
     charts: Dict[str, Any] = Field(default_factory=dict)  # {chart_id: base64_png_string}
 
     def display(self, field: str) -> str:
@@ -332,4 +336,76 @@ class GeojitReportData(BaseModel):
         if val is None:
             return '<span class="missing">Data not available</span>'
         return str(val)
+
+
+# ─── Adaptive Report Block Models (AI-Driven Content) ───────────────────────
+
+class TableRow(BaseModel):
+    """A single row in an adaptive table — label + values per column."""
+    label: str
+    values: Dict[str, Any] = Field(default_factory=dict)  # {column_name: value}
+    is_highlight: bool = False
+    is_header: bool = False  # Section header row (e.g., "Profitability Ratios")
+
+class TableBlock(BaseModel):
+    """An adaptive financial table — AI decides columns and rows."""
+    title: str
+    unit_label: Optional[str] = None          # e.g., "Rs. cr", "%", "Rs."
+    columns: List[str] = Field(default_factory=list)  # e.g., ["FY22", "FY23", "FY24", "FY25", "FY26E"]
+    rows: List[TableRow] = Field(default_factory=list)
+    note: Optional[str] = None                # e.g., "E = AI estimate, not company guidance"
+
+class ChartSpec(BaseModel):
+    """Chart specification — AI decides what to plot and how."""
+    chart_type: str = "bar"                   # bar, line, pie, bar_line, grouped_bar
+    title: str
+    x_axis_label: Optional[str] = None
+    y_axis_label: Optional[str] = None
+    x_categories: List[str] = Field(default_factory=list)  # e.g., ["FY22", "FY23", ...]
+    series: List[ChartSeries] = Field(default_factory=list)
+    y2_axis_label: Optional[str] = None       # For dual-axis charts
+
+class NarrativeBlock(BaseModel):
+    """A narrative text block — AI-written analysis."""
+    title: str
+    paragraphs: List[str] = Field(default_factory=list)
+    bullets: List[str] = Field(default_factory=list)
+    is_disclaimer: bool = False
+
+class KPIBlock(BaseModel):
+    """KPI cards block — summary metrics at the top."""
+    cards: List[KPICard] = Field(default_factory=list)
+
+class ReportSection(BaseModel):
+    """
+    An adaptive report section — the AI decides what to include based on
+    available extracted data. Each section has a content_type that tells
+    the template how to render it.
+    
+    Sections are ordered by the `order` field and rendered sequentially.
+    A page_break flag forces a new PDF page before this section.
+    """
+    id: str                                   # unique identifier e.g. "pl_summary"
+    title: str                                # display title e.g. "Profit & Loss Summary"
+    order: int = 0                            # display order (ascending)
+    content_type: str = "narrative"           # "table" | "chart" | "narrative" | "kpi" | "mixed"
+    page_break: bool = False                  # force new page before this section
+    page: Optional[int] = None                # suggested page number (1-based)
+    
+    # Content blocks — only one is populated based on content_type
+    table: Optional[TableBlock] = None
+    chart: Optional[ChartSpec] = None
+    narrative: Optional[NarrativeBlock] = None
+    kpi: Optional[KPIBlock] = None
+    
+    # For "mixed" type — multiple blocks rendered in order
+    tables: List[TableBlock] = Field(default_factory=list)
+    charts: List[ChartSpec] = Field(default_factory=list)
+    narratives: List[NarrativeBlock] = Field(default_factory=list)
+    
+    # Metadata
+    source_note: Optional[str] = None         # e.g., "Source: uploaded document, verified"
+
+# Resolve forward reference
+GeojitReportData.model_rebuild()
 

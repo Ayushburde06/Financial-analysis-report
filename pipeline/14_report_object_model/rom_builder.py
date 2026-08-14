@@ -33,23 +33,46 @@ class ROMBuilder:
         print("     [ROM Builder] Constructing strict GeojitReportData object...")
         source_context = source_context or {}
 
-        # ROMBuilder is now just a strict data assembler per user request.
-        # It takes the pre-computed dictionaries and instantiates the Pydantic model.
-        # No logic, no prompts, no calculations, no analysis.
-        
+        def _txt(val):
+            if not isinstance(val, str):
+                return val
+            s = (
+                val.replace("â€”", "—").replace("â€“", "–")
+                .replace("â€™", "'").replace("NoneType", "—")
+            )
+            return s.strip()
+
+        rec = source_context.get("recommendation")
+        if rec is None:
+            rec = RecommendationNode(action="NOT RATED")
+        elif getattr(rec, "action", None) in (None, "", "None"):
+            rec = rec.model_copy(update={"action": "NOT RATED"}) if hasattr(rec, "model_copy") else rec
+
+        charts = source_context.get("charts") or {}
+        if isinstance(charts, dict):
+            charts = {
+                k: v for k, v in charts.items()
+                if isinstance(v, str) and len(v) > 80
+            }
+
+        highlights = [
+            _txt(h) for h in (source_context.get("key_highlights") or [])
+            if h and str(h).strip() not in ("None", "NoneType", "")
+        ]
+
         return GeojitReportData(
             company=source_context.get("company", CompanyInfo()),
             headline=source_context.get("headline"),
             scorecard=source_context.get("scorecard"),
             kpi_cards=source_context.get("kpi_cards", []),
             deal_win_cards=source_context.get("deal_win_cards", []),
-            business_description=source_context.get("business_description"),
-            report_subtitle=source_context.get("report_subtitle"),
-            outlook_valuation=source_context.get("outlook_valuation"),
-            executive_summary=source_context.get("executive_summary"),
-            investment_view=source_context.get("investment_view"),
+            business_description=_txt(source_context.get("business_description")),
+            report_subtitle=_txt(source_context.get("report_subtitle")),
+            outlook_valuation=_txt(source_context.get("outlook_valuation")),
+            executive_summary=_txt(source_context.get("executive_summary")),
+            investment_view=_txt(source_context.get("investment_view")),
             quarterly_analysis=source_context.get("quarterly_analysis"),
-            key_highlights=source_context.get("key_highlights", []),
+            key_highlights=highlights,
             deal_wins=source_context.get("deal_wins", []),
             segment_analysis=source_context.get("segment_analysis"),
             geography=source_context.get("geography"),
@@ -72,7 +95,8 @@ class ROMBuilder:
             chart_commentary=source_context.get("chart_commentary"),
             ai_deep_research=source_context.get("ai_deep_research"),
             financials=source_context.get("financials", {}),
-            recommendation=source_context.get("recommendation", RecommendationNode(action="HOLD")),
-            charts=source_context.get("charts", {}),
-            appendix=source_context.get("appendix", {})
+            recommendation=rec,
+            charts=charts,
+            appendix=source_context.get("appendix", {}),
+            source_coverage=source_context.get("source_coverage", {})
         )

@@ -10,7 +10,7 @@ maps into distinct report fields:
 """
 
 import re
-from typing import Dict
+from typing import Dict, Optional
 from pydantic import BaseModel
 
 import sys
@@ -63,52 +63,122 @@ def _strip_numbers_from_narrative(text: str) -> str:
     return text.strip()
 
 
+def _line_numeric(item, period: str):
+    try:
+        v = getattr(item, period, None)
+        v = getattr(v, "value", v)
+        return float(v) if isinstance(v, (int, float)) else None
+    except (TypeError, ValueError):
+        return None
+
+
+def _magnitude(current, previous) -> Optional[str]:
+    if current is None or previous in (None, 0):
+        return None
+    change = (current - previous) / abs(previous) * 100.0
+    abs_ch = abs(change)
+    if abs_ch < 2:
+        return "broadly unchanged"
+    direction = "higher" if change > 0 else "lower"
+    if abs_ch < 8:
+        return f"modestly {direction}"
+    if abs_ch < 20:
+        return direction
+    return f"sharply {direction}"
+
+
+def _pretty_metric(key: str) -> str:
+    labels = {
+        "revenue": "Revenue", "nii": "NII", "pat": "PAT", "ebitda": "EBITDA",
+        "pbt": "PBT", "eps": "EPS", "nim": "NIM", "gnpa": "GNPA", "nnpa": "NNPA",
+        "casa_ratio": "CASA", "advances": "Advances", "deposits": "Deposits",
+        "gmv": "GMV", "capacity": "Capacity", "arpu": "ARPU",
+    }
+    if key in labels:
+        return labels[key]
+    return str(key or "").replace("_", " ").strip().title() or "Metric"
+
+
 def _narrative_evidence_cues(evidence_packet: BaseModel) -> str:
-    """Build number-free interpretation cues from verified evidence."""
-    def value(item, period):
-        try:
-            v = getattr(item, period, None)
-            v = getattr(v, "value", v)
-            return float(v) if isinstance(v, (int, float)) else None
-        except (TypeError, ValueError):
-            return None
-
-    def trend(label, item):
-        if item is None:
-            return None
-        cur = value(item, "q_current")
-        yoy = value(item, "q_prev_year")
-        qoq = value(item, "q_prev_qtr")
-        cues = []
-        if cur is not None and yoy not in (None, 0):
-            cues.append(f"{label} is {'higher' if cur > yoy else 'lower'} YoY")
-        if cur is not None and qoq not in (None, 0):
-            cues.append(f"{label} is {'higher' if cur > qoq else 'lower'} QoQ")
-        return "; ".join(cues) if cues else None
-
+    """Number-free, filing-specific cues so the LLM can describe THIS company."""
     cues = []
+    name = getattr(evidence_packet, "company_name", "") or "This company"
+    industry = getattr(evidence_packet, "industry", "") or ""
+    period = getattr(evidence_packet, "period_label", "") or "the latest reported period"
+    unit = getattr(evidence_packet, "source_unit", "") or ""
+    cues.append(f"Company: {name}")
+    if industry:
+        cues.append(f"Industry in this filing: {industry}")
+    cues.append(f"Reporting period: {period}")
+    if unit:
+        cues.append(f"Source unit: {unit}")
+
     pl = getattr(evidence_packet, "pl", None)
-    for label, field in (("primary metric", "revenue"), ("PAT", "pat"),
-                         ("EBITDA", "ebitda"), ("PBT", "pbt")):
-        cue = trend(label, getattr(pl, field, None) if pl else None)
-        if cue:
-            cues.append(cue)
+    revenue_label = "NII" if "bank" in (industry or "").lower() else "Revenue"
 
-    banking = getattr(evidence_packet, "banking_metrics", None) or {}
-    if banking:
-        cues.append("Banking-sector evidence is available")
-        for label, field in (("NIM", "nim"), ("GNPA", "gnpa"),
-                             ("NNPA", "nnpa"), ("CASA", "casa_ratio"),
-                             ("credit growth", "credit_growth")):
-            item = banking.get(field) if isinstance(banking, dict) else getattr(banking, field, None)
-            cue = trend(label, item)
-            if cue:
-                cues.append(cue)
+    def add_trend(label, item):
+        if item is None:
+            return
+        cur = _line_numeric(item, "q_current")
+        yoy = _line_numeric(item, "q_prev_year")
+        qoq = _line_numeric(item, "q_prev_qtr")
+        mag = _magnitude(cur, yoy)
+        if mag:
+            cues.append(f"{label} in {period} is {mag} versus the year-ago quarter")
+        mag_q = _magnitude(cur, qoq)
+        if mag_q and mag_q != mag:
+            cues.append(f"{label} is {mag_q} versus the prior quarter")
+        annual = {}
+        if hasattr(item, "actual_year_values"):
+            annual = item.actual_year_values() or {}
+        years = sorted(annual)
+        if len(years) >= 2:
+            mag_a = _magnitude(annual[years[-1]], annual[years[-2]])
+            if mag_a:
+                cues.append(f"{label} on an annual basis is {mag_a} versus the prior actual year")
 
-    available = [name for name in ("pl", "bs", "cf", "banking_metrics")
-                 if getattr(evidence_packet, name, None)]
-    cues.append("Available evidence sections: " + ", ".join(available))
-    return "\n".join(f"- {cue}." for cue in cues)
+    add_trend(revenue_label, getattr(pl, "revenue", None) if pl else None)
+    add_trend("PAT", getattr(pl, "pat", None) if pl else None)
+    add_trend("EBITDA", getattr(pl, "ebitda", None) if pl else None)
+    add_trend("PBT", getattr(pl, "pbt", None) if pl else None)
+
+    extras = getattr(evidence_packet, "banking_metrics", None) or {}
+    extra_names = []
+    if isinstance(extras, dict):
+        extra_names = [_pretty_metric(k) for k in extras.keys() if k]
+        for key, item in list(extras.items())[:8]:
+            add_trend(_pretty_metric(key), item)
+    if extra_names:
+        cues.append("Extra metrics present in this filing: " + ", ".join(extra_names[:10]))
+
+    facts = list(getattr(evidence_packet, "business_facts", None) or [])
+    if facts:
+        cues.append("Activity / strategy sentences copied from this filing (figures removed):")
+        for fact in facts[:5]:
+            cues.append(f"  FACT: {fact}")
+    else:
+        cues.append(
+            "No usable activity paragraph was extracted. Describe only what the "
+            f"industry label ({industry or 'unspecified'}) and metric names imply. "
+            "Do not invent products, brands, or geographies."
+        )
+
+    risks = list(getattr(evidence_packet, "risk_facts", None) or [])
+    if risks:
+        cues.append("Risk sentences copied from this filing (figures removed):")
+        for fact in risks[:3]:
+            cues.append(f"  RISK: {fact}")
+
+    bs = getattr(evidence_packet, "bs", None)
+    if bs and hasattr(getattr(bs, "total_assets", None), "actual_year_values"):
+        if getattr(bs, "total_assets").actual_year_values():
+            cues.append("Balance sheet figures are present in this filing.")
+    cf = getattr(evidence_packet, "cf", None)
+    if cf and hasattr(getattr(cf, "operating_cash_flow", None), "actual_year_values"):
+        if getattr(cf, "operating_cash_flow").actual_year_values():
+            cues.append("Operating cash flow figures are present in this filing.")
+
+    return "\n".join(f"- {cue}" if not cue.startswith("  ") else cue for cue in cues)
 
 
 def parse_narrative_sections(narrative: str) -> Dict[str, object]:
@@ -218,7 +288,7 @@ def parse_narrative_sections(narrative: str) -> Dict[str, object]:
         return any(t in low for t in _OFFTOPIC_TERMS)
 
     if _leaks_offtopic(result["report_subtitle"]):
-        result["report_subtitle"] = "Growth trajectory intact; valuation warrants monitoring"
+        result["report_subtitle"] = "Results as reported; thesis limited to this filing"
 
     # Never allow prompt/example placeholders to reach the report cover.
     _subtitle_placeholder = re.compile(
@@ -226,7 +296,7 @@ def parse_narrative_sections(narrative: str) -> Dict[str, object]:
         flags=re.IGNORECASE,
     )
     if _subtitle_placeholder.search(result["report_subtitle"]):
-        result["report_subtitle"] = "Growth trajectory and valuation remain under review"
+        result["report_subtitle"] = "Results as reported; thesis limited to this filing"
 
     # Also scrub leaked terms from the narrative body if the whole company is wrong
     # (business_description / outlook). Replace the term, not the whole section, to
@@ -264,16 +334,41 @@ class BaseFinancialAgent:
                 f"{type(evidence_packet)}. Must be a verified Pydantic evidence packet."
             )
 
-        packet_json = self._sanitize_packet(evidence_packet)
+        cues = _narrative_evidence_cues(evidence_packet)
         system_prompt = self._build_system_prompt()
-        user_prompt = self._build_user_prompt(
-            packet_json, _narrative_evidence_cues(evidence_packet)
-        )
+        user_prompt = self._build_user_prompt(cues)
 
         raw_response = call_azure_deepseek(system_prompt, user_prompt)
         narrative = _strip_thinking_blocks(raw_response or "")
 
         # Safety net: strip any numbers that slipped through
+        if narrative.strip():
+            narrative = _strip_numbers_from_narrative(narrative)
+
+        if not narrative.strip():
+            narrative = self._empty_placeholder(evidence_packet)
+
+        return narrative
+
+    def generate_analytical(
+        self,
+        evidence_packet: BaseModel,
+        system_prompt: str,
+        user_prompt: str,
+    ) -> str:
+        """
+        Generate narrative using pre-computed analytical system/user prompts.
+        Same quarantine and post-processing as generate().
+        """
+        if not isinstance(evidence_packet, BaseModel):
+            raise TypeError(
+                f"LLM Quarantine Violation: Agent received raw data of type "
+                f"{type(evidence_packet)}. Must be a verified Pydantic evidence packet."
+            )
+
+        raw_response = call_azure_deepseek(system_prompt, user_prompt)
+        narrative = _strip_thinking_blocks(raw_response or "")
+
         if narrative.strip():
             narrative = _strip_numbers_from_narrative(narrative)
 
@@ -308,11 +403,10 @@ class BaseFinancialAgent:
             "Your narrative must contain ZERO numbers."
         )
 
-    def _build_user_prompt(self, packet_json: str, evidence_cues: str = "") -> str:
+    def _build_user_prompt(self, evidence_cues: str = "") -> str:
         return (
-            f"Evidence Packet (verified financial data):\n"
-            f"```json\n{packet_json}\n```\n\n"
-            f"Deterministic interpretation cues (derived only from verified values; no figures):\n"
+            "Write the four Geojit sections from this filing brief only. "
+            "Do not invent products, geographies, peers, or numbers.\n\n"
             f"{evidence_cues}\n\n"
             f"Task:\n{self._get_task_instruction()}"
         )
@@ -321,18 +415,18 @@ class BaseFinancialAgent:
         raise NotImplementedError("Subclasses must define their task instruction.")
 
     def _empty_placeholder(self, evidence_packet: BaseModel) -> str:
-        company = getattr(evidence_packet, "company_name", "the company")
+        company = getattr(evidence_packet, "company_name", "The company")
+        industry = getattr(evidence_packet, "industry", "") or "the reported"
         return (
             f"BUSINESS_DESCRIPTION\n"
-            f"{company} operates in the financial services sector. "
-            f"Detailed business description not available.\n\n"
+            f"{company} is covered from this filing as a {industry} business. "
+            f"The source does not include a usable description of products or operations "
+            f"beyond the financial statements.\n\n"
             f"KEY_HIGHLIGHTS\n"
-            f"• Financial data extracted from source document.\n"
-            f"• Refer to tables below for extracted metrics.\n\n"
+            f"• Refer to the tables for figures printed in this filing.\n\n"
             f"REPORT_SUBTITLE\n"
-            f"Results update — refer to financial tables\n\n"
+            f"{industry} update; coverage limited to reported statements\n\n"
             f"OUTLOOK_VALUATION\n"
-            f"Insufficient data to generate outlook. "
-            f"Refer to extracted financial tables for available metrics. "
-            f"We assign a Not Rated stance pending complete financial data."
+            f"This note follows the statements in the source filing. "
+            f"We assign a Not Rated stance as a printed CMP and target are not available."
         )

@@ -4,6 +4,7 @@ Every sector subclass defines its own field mappings, labels, and chart config.
 """
 from dataclasses import dataclass, field
 from typing import List, Dict
+import re
 
 
 @dataclass
@@ -59,6 +60,15 @@ class SectorConfig:
     )
 
     def is_match(self, detected_sector: str) -> bool:
-        """Return True if detected_sector matches this config."""
-        s = detected_sector.lower()
-        return s == self.sector_name.lower() or any(a in s for a in self.sector_aliases)
+        s = (detected_sector or "").strip().lower()
+        if not s:
+            return False
+        if s == self.sector_name.lower():
+            return True
+        for alias in self.sector_aliases:
+            a = (alias or "").strip().lower()
+            if not a:
+                continue
+            if re.search(rf"(?<!\w){re.escape(a)}(?!\w)", s):
+                return True
+        return False

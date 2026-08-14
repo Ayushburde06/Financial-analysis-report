@@ -51,14 +51,27 @@ Return ONLY a valid JSON dictionary. Do not include markdown formatting like ```
         except json.JSONDecodeError as e:
             print(f"Failed to parse LLM narrative response: {e}")
             
-    # Fallback if LLM fails
-    narratives = {
-        "executive_summary": "Revenue growth remained robust during the quarter, supported by record deal wins and continued execution across engineering segments.",
-        "financial_analysis": "Operating profitability remained stable, indicating disciplined cost management despite ongoing investments in AI initiatives.",
-        "business_analysis": "The company maintained strong momentum across core segments with a diversified geographic mix.",
-        "risk_analysis": "Macro headwinds in Europe and minor client concentration risks warrant monitoring.",
-        "management_commentary": "Management is optimistic about the medium-term outlook, targeting sustained double-digit growth.",
-        "investment_thesis": "The combination of stable margins, strong execution, and deep AI penetration supports a constructive view on the stock.",
-        "conclusion": "We recommend an ACCUMULATE rating based on the resilience in earnings and strategic deal wins."
+    # Do not manufacture a report when the narrative model is unavailable.
+    growth = structured_intelligence.get("growth") or {}
+    profitability = structured_intelligence.get("profitability") or {}
+    risks = structured_intelligence.get("risks") or []
+    growth_evidence = ", ".join(str(item) for item in growth.get("evidence", []) if item)
+    profitability_evidence = ", ".join(
+        str(item) for item in profitability.get("evidence", []) if item
+    )
+    risk_text = "; ".join(str(item) for item in risks if item)
+    return {
+        "executive_summary": "",
+        "financial_analysis": (
+            f"Recorded profitability evidence: {profitability_evidence}."
+            if profitability_evidence else ""
+        ),
+        "business_analysis": (
+            f"Recorded growth evidence: {growth_evidence}."
+            if growth_evidence else ""
+        ),
+        "risk_analysis": f"Recorded risks: {risk_text}." if risk_text else "",
+        "management_commentary": "",
+        "investment_thesis": "",
+        "conclusion": "",
     }
-    return narratives

@@ -12,7 +12,7 @@ load_dotenv()
 AZURE_DOC_INTEL_ENDPOINT: str = os.getenv("AZURE_DOC_INTEL_ENDPOINT", "")
 AZURE_DOC_INTEL_KEY: str = os.getenv("AZURE_DOC_INTEL_KEY", "")
 
-# ─── Azure OpenAI (GPT-5-mini / GPT-4o-mini) ─────────────────────────────────
+# ─── Azure OpenAI (GPT-5.6 Luna) ─────────────────────────────────────────────
 AZURE_OPENAI_ENDPOINT: str = os.getenv("AZURE_OPENAI_ENDPOINT", "")
 AZURE_OPENAI_KEY: str = os.getenv("AZURE_OPENAI_API_KEY", "")
 AZURE_OPENAI_DEPLOYMENT: str = os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME", "gpt-4o")
@@ -34,8 +34,6 @@ MAX_PAGES_SAMPLE: int = 80             # Hard cap on pages to process
 CHUNK_SIZE: int = 800                   # Characters per embedding chunk
 CHUNK_OVERLAP: int = 100               # Overlap between chunks
 
-# ─── Geojit Report Layout Constant ───────────────────────────────────────────
-FISCAL_YEARS: list = ["FY23A", "FY24A", "FY25A", "FY26E", "FY27E"]
 
 def validate_config() -> dict:
     """Check all required credentials are present and return status dict."""

@@ -7,13 +7,14 @@ that the PDF pipeline produces, so everything downstream works unchanged.
 Supported formats:
   CSV: rows = metrics, columns = periods (e.g. FY23,FY24,FY25,Q2FY26)
        First column = metric name, rest = values
-  TXT: free-form text with financial data — sent to DeepSeek V4 Pro
+  TXT: free-form text with financial data — sent to GPT-5.6 Luna
        for extraction using same prompt as Stage 08
 """
 import csv
 import io
 import json
 import re
+from pathlib import Path
 from typing import Dict, Any, Optional
 
 
@@ -33,6 +34,9 @@ _CSV_METRIC_MAP = {
     "ebitda":               "ebitda",
     "operating profit":     "ebitda",
     "ebit":                 "ebit",
+    "pbt":                  "pbt",
+    "profit before tax":    "pbt",
+    "profit before taxation": "pbt",
     "pat":                  "pat",
     "net profit":           "pat",
     "profit after tax":     "pat",
@@ -164,10 +168,10 @@ def parse_csv(content: str) -> Dict[str, Any]:
 
 def parse_txt(content: str, sector: str = "") -> Dict[str, Any]:
     """
-    Send free-form TXT to DeepSeek V4 Pro with same extraction prompt
+    Send free-form TXT to GPT-5.6 Luna with same extraction prompt
     as Stage 08 (Hybrid Retrieval), returning same JSON structure.
     """
-    from pipeline.utils.llm_client import call_azure_deepseek
+    from pipeline.utils.llm_client import call_extraction_llm
 
     sector_hint = f"Sector: {sector}. " if sector else ""
     is_banking = any(w in sector.lower() for w in ("bank", "nbfc", "finance"))
@@ -176,7 +180,7 @@ def parse_txt(content: str, sector: str = "") -> Dict[str, Any]:
         fields = """nii, nim, advances, deposits, casa_ratio, gnpa, nnpa,
 pcr, roe, roa, capital_adequacy, tier1_ratio, pat, eps"""
     else:
-        fields = """revenue, ebitda, ebit, pat, eps, total_assets,
+        fields = """revenue, ebitda, ebit, pbt, pat, eps, total_assets,
 total_equity, total_debt, cash, operating_cash_flow"""
 
     system = "You are a financial data extraction expert. Extract structured financials from text. Return ONLY valid JSON."
@@ -191,6 +195,7 @@ Required metrics: {fields}
 Return JSON format:
 {{
   "revenue": {{"fy25": 9642, "q_current": 2980, ...}},
+  "pbt":     {{"fy25": 1264, "q_current": 329, ...}},
   "pat":     {{"fy25": 1264, "q_current": 329, ...}},
   ...
 }}
@@ -198,8 +203,8 @@ Return JSON format:
 TEXT:
 {content[:8000]}"""
 
-    print("     [TXT Handler] Sending to DeepSeek V4 Pro for extraction...")
-    raw_resp = call_azure_deepseek(system, user, max_tokens=2048, temperature=0.1)
+    print("     [TXT Handler] Sending to GPT-5.6 Luna for extraction...")
+    raw_resp = call_extraction_llm(system, user, max_tokens=2048)
     if not raw_resp:
         return {}
 

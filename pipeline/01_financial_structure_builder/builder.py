@@ -2,7 +2,7 @@
 Stage 01: Financial Structure Builder
 
 Supports three input formats:
-  PDF  → Mistral Document AI OCR (per-page or full-doc)
+  PDF  → Azure Document Intelligence, one page at a time → Markdown
   CSV  → pandas read_csv → text table → MasterDocument DOM
   TXT  → plain text read → MasterDocument DOM
 
@@ -23,7 +23,11 @@ def _build_master_doc_from_text(text: str, source_file: str) -> MasterDocument:
     Convert a plain text string into a MasterDocument DOM.
     Splits into 3,000-char pages so downstream stages see normal page counts.
     """
-    master_doc = MasterDocument(source_file=source_file)
+    master_doc = MasterDocument(
+        source_file=source_file,
+        source_format=Path(source_file).suffix.lower().lstrip(".") or "text",
+        source_metadata={"extraction_mode": "direct_text"},
+    )
     chunk_size = 3000
     chunks = [text[i:i + chunk_size] for i in range(0, max(len(text), 1), chunk_size)]
     for page_idx, chunk in enumerate(chunks):
@@ -39,6 +43,7 @@ def _build_master_doc_from_text(text: str, source_file: str) -> MasterDocument:
                 ))
         if section.nodes:
             master_doc.sections.append(section)
+            master_doc.page_markdown[str(page_num)] = chunk.strip()
     return master_doc
 
 
@@ -128,14 +133,11 @@ class FinancialStructureBuilder:
             print("     [Stage 01] MasterDocument complete (TXT).")
             return doc
 
-        # ── PDF (default) — Azure Document Intelligence ───────────────────────
-        # Prefer fast local extraction for selectable PDFs. Scanned PDFs still
-        # use Azure OCR when local extraction returns no usable text.
+        # ── PDF (default) — per-page Azure Layout OCR → Markdown ──────────────
         content = ""
         total_chars = 0
-        # OCR-first is the default because it preserves layout, tables, and
-        # chart/figure text more faithfully. Set PREFER_LOCAL_PDF_TEXT=1 only
-        # when speed is preferred for selectable, text-heavy PDFs.
+        # Set PREFER_LOCAL_PDF_TEXT=1 only when speed is preferred for
+        # selectable, text-heavy PDFs (skips Azure Markdown OCR).
         if os.getenv("PREFER_LOCAL_PDF_TEXT", "0") != "0":
             print(f"     [Stage 01] Checking for selectable PDF text locally: {file_path}")
             content = _extract_pdf_text_locally(file_path)
@@ -143,13 +145,12 @@ class FinancialStructureBuilder:
             print(f"     [Local PDF] Total text extracted: {total_chars:,} chars")
 
         if not content or total_chars < 100:
-            # Fast default: one Azure layout-OCR request for the complete PDF.
-            # Azure returns page markers, so downstream retrieval still chunks
-            # the document per page without locally splitting/rendering pages.
-            print(f"     [Stage 01] Extracting PDF with Azure Document Intelligence: {file_path}")
+            print(
+                f"     [Stage 01] Per-page Azure OCR → Markdown: {file_path}"
+            )
             content = extract_pdf_azure_di(file_path)
             total_chars = len(content) if content else 0
-            print(f"     [Azure DI] Total text extracted: {total_chars:,} chars")
+            print(f"     [Azure DI] Total Markdown extracted: {total_chars:,} chars")
 
             # Optional high-detail fallback for difficult chart-heavy scans.
             # It requires PyMuPDF only when explicitly enabled and is not part
@@ -177,8 +178,17 @@ class FinancialStructureBuilder:
                 "Check OCR credentials or provide a text-based PDF."
             )
 
-        print("     [Stage 01] Parsing per-page OCR response into MasterDocument DOM...")
-        master_doc = MasterDocument(source_file=file_path)
+        print("     [Stage 01] Parsing per-page Markdown into MasterDocument DOM...")
+        master_doc = MasterDocument(
+            source_file=file_path,
+            source_format="pdf",
+            source_metadata={
+                "extraction_mode": "azure_document_intelligence_markdown"
+                if content and os.getenv("PREFER_LOCAL_PDF_TEXT", "0") == "0"
+                else "local_pdf_text_or_fallback",
+                "markdown_chars": total_chars,
+            },
+        )
 
         # Split content into pages using regex markers
         raw_chunks = _PAGE_BREAK_PATTERN.split(content)
@@ -224,6 +234,7 @@ class FinancialStructureBuilder:
                     ))
             if section.nodes:
                 master_doc.sections.append(section)
+                master_doc.page_markdown[str(page_num)] = page_content
 
         print(f"     [Stage 01] MasterDocument complete — {len(master_doc.sections)} pages with per-page tracking.")
         return master_doc

@@ -59,16 +59,18 @@ async def generate_report_no_verify(pdf_path: str):
     kg = stage_02.KnowledgeBuilder.run(master_doc)
     
     print("[Stage 03] KPI Discovery Engine...")
-    kpis = stage_03.KPIDiscoveryEngine.run(kg)
+    kpis = stage_03.KPIDiscoveryEngine.run(kg, master_doc.get_full_text())
     
     print("[Stage 04] Coverage Analyzer...")
     coverage = stage_04.CoverageAnalyzer.run(master_doc, kpis)
     
     print("[Stage 05] Industry Detection Engine...")
-    industry = stage_05.IndustryDetectionEngine.run(kg, master_doc.get_full_text())
+    industry = stage_05.IndustryDetectionEngine.run(
+        kg, master_doc.get_full_text(), kpis=kpis
+    )
     
     print("[Stage 06] Adaptive Analysis Planner...")
-    plan = stage_06.AdaptiveAnalysisPlanner.run(industry, coverage)
+    plan = stage_06.AdaptiveAnalysisPlanner.run(industry, coverage, kpis=kpis)
     
     print("[Stage 08] Hybrid Retrieval Engine...")
     retriever = stage_08.HybridRetriever(plan, master_doc)
@@ -93,7 +95,12 @@ async def generate_report_no_verify(pdf_path: str):
     if not company_name:
         company_name = "Unknown Company"
     
-    fa_evidence = stage_10.EvidenceBuilder.build_financial_evidence(raw_financials, company_name=company_name)
+    fa_evidence = stage_10.EvidenceBuilder.build_financial_evidence(
+        raw_financials,
+        company_name=company_name,
+        industry=industry,
+        extra_keys=kpis,
+    )
     
     print("[Stage 13] Lead Analyst (Structured Intelligence)...")
     stage_13 = importlib.import_module("pipeline.13_lead_research_analyst.lead_analyst")

@@ -1,78 +1,122 @@
 """
-projections.py - Forward Estimates (FY26E, FY27E)
+projections.py — Forward estimates for the Geojit E columns.
 
-KEY CHANGE: Projections are ONLY used for chart trend lines and the
-estimates table — they are marked is_estimate=True and NEVER injected
-into the evidence packet that Stage 11 (DeepSeek) uses for narrative.
+Python only. Marks is_estimate=True. Never sent as source facts.
 
-This prevents computed projections (125139, 131395 etc.) from appearing
-as absolute numbers in the narrative and failing Stage 12b fact-check,
-since those values don't exist in the source document.
-
-Rules:
-  - Only project when FY25 actual is available (real data exists)
-  - Never project from run-rate alone (q_current * 4) — too speculative
-  - Cap growth rate at ±30% to prevent wild extrapolations
-  - Always set is_estimate=True so verifier ignores them
+- Keep numbers already extracted from the filing.
+- Project the next two years only when two annual actuals exist
+  (historical growth, capped ±30%).
+- No 5% default. No run-rate (q_current × 4).
 """
+import re
+from typing import Optional, Tuple
+
 from .evidence_packets import FinancialLineItem, VerifiedNumber
 
-class ForwardProjector:
 
-    MAX_GROWTH_RATE = 0.30   # cap at ±30% to prevent wild projections
+class ForwardProjector:
+    MAX_GROWTH_RATE = 0.30
     MIN_GROWTH_RATE = -0.30
+
+    @staticmethod
+    def _year_num(key: str) -> int:
+        nums = re.findall(r"\d+", key or "")
+        return int(nums[0]) if nums else 0
+
+    @staticmethod
+    def _latest_actual_year(line_item: FinancialLineItem):
+        candidates = line_item.actual_year_values() if hasattr(line_item, "actual_year_values") else {}
+        if not candidates:
+            return None, None
+        latest_key = max(candidates.keys(), key=ForwardProjector._year_num)
+        return latest_key, candidates[latest_key]
+
+    @staticmethod
+    def _second_latest_actual_year(line_item: FinancialLineItem, latest_key: str):
+        candidates = {
+            k: v for k, v in (line_item.actual_year_values() or {}).items()
+            if k != latest_key
+        }
+        if not candidates:
+            return None, None
+        second_key = max(candidates.keys(), key=ForwardProjector._year_num)
+        return second_key, candidates[second_key]
+
+    @staticmethod
+    def _estimate_year_labels(latest_key: str) -> Tuple[str, str]:
+        yr = ForwardProjector._year_num(latest_key)
+        return f"fy{yr + 1}e", f"fy{yr + 2}e"
+
+    @staticmethod
+    def _existing_estimate(line_item: FinancialLineItem, key: str) -> Optional[VerifiedNumber]:
+        vn = line_item.get_annual_value(key)
+        if vn and isinstance(vn.value, (int, float)):
+            return vn
+        return None
+
+    @staticmethod
+    def _store(line_item: FinancialLineItem, key: str, vn: VerifiedNumber) -> None:
+        if line_item.annual is None:
+            line_item.annual = {}
+        line_item.annual[key] = vn
+        if key == "fy26e":
+            line_item.fy26e = vn
+        elif key == "fy27e":
+            line_item.fy27e = vn
 
     @staticmethod
     def project_next_two_years(
         metric_name: str,
         line_item: FinancialLineItem,
-        guidance: str = None
+        guidance: str = None,
     ) -> FinancialLineItem:
-        """
-        Calculates FY26E and FY27E ONLY when FY25 annual actual is available.
-        Projections are flagged is_estimate=True — excluded from narrative verification.
-
-        Priority:
-          1. Explicit analyst guidance (if provided as string)
-          2. Historical trend from FY24→FY25
-          3. Conservative 5% default
-          NO run-rate fallback (q_current * 4) — too unreliable
-        """
-        fy25_val = line_item.fy25.value
-        fy24_val = line_item.fy24.value
-
-        # Only project if we have a real FY25 annual actual
-        if fy25_val in ("[N/A]", None) or not isinstance(fy25_val, (int, float)):
-            # No annual data — don't guess estimates
-            line_item.fy26e = VerifiedNumber(value="[N/A]", is_estimate=True)
-            line_item.fy27e = VerifiedNumber(value="[N/A]", is_estimate=True)
+        latest_key, latest_val = ForwardProjector._latest_actual_year(line_item)
+        if latest_key is None or not isinstance(latest_val, (int, float)):
             return line_item
 
-        base_val    = float(fy25_val)
-        growth_rate = 0.05   # conservative default
+        est_key_1, est_key_2 = ForwardProjector._estimate_year_labels(latest_key)
+        have_1 = ForwardProjector._existing_estimate(line_item, est_key_1)
+        have_2 = ForwardProjector._existing_estimate(line_item, est_key_2)
+        if have_1 and have_2:
+            ForwardProjector._store(line_item, est_key_1, have_1)
+            ForwardProjector._store(line_item, est_key_2, have_2)
+            return line_item
 
-        # 1. Compute from FY24→FY25 history
-        if fy24_val not in ("[N/A]", None) and isinstance(fy24_val, (int, float)) and float(fy24_val) != 0:
-            raw_growth = (base_val - float(fy24_val)) / abs(float(fy24_val))
-            # Cap to prevent runaway projections
-            growth_rate = max(
-                ForwardProjector.MIN_GROWTH_RATE,
-                min(ForwardProjector.MAX_GROWTH_RATE, raw_growth)
-            )
+        second_key, second_val = ForwardProjector._second_latest_actual_year(
+            line_item, latest_key
+        )
+        if second_key is None or not isinstance(second_val, (int, float)) or float(second_val) == 0:
+            return line_item
 
-        # 2. Guidance overrides
+        growth_rate = (float(latest_val) - float(second_val)) / abs(float(second_val))
+        growth_rate = max(
+            ForwardProjector.MIN_GROWTH_RATE,
+            min(ForwardProjector.MAX_GROWTH_RATE, growth_rate),
+        )
         if guidance:
-            import re
-            matches = re.findall(r'(\d+(?:\.\d+)?)\s*%', guidance)
+            matches = re.findall(r"(\d+(?:\.\d+)?)\s*%", guidance)
             if matches:
                 g = float(matches[0]) / 100.0
-                growth_rate = max(ForwardProjector.MIN_GROWTH_RATE,
-                                  min(ForwardProjector.MAX_GROWTH_RATE, g))
+                growth_rate = max(
+                    ForwardProjector.MIN_GROWTH_RATE,
+                    min(ForwardProjector.MAX_GROWTH_RATE, g),
+                )
 
-        fy26e_val = round(base_val * (1 + growth_rate), 2)
-        fy27e_val = round(fy26e_val * (1 + growth_rate), 2)
-
-        line_item.fy26e = VerifiedNumber(value=fy26e_val, is_estimate=True)
-        line_item.fy27e = VerifiedNumber(value=fy27e_val, is_estimate=True)
-
+        base = float(latest_val)
+        if have_1 is None:
+            ForwardProjector._store(
+                line_item,
+                est_key_1,
+                VerifiedNumber(value=round(base * (1 + growth_rate), 2), is_estimate=True),
+            )
+            have_1 = line_item.get_annual_value(est_key_1)
+        if have_2 is None and have_1 and isinstance(have_1.value, (int, float)):
+            ForwardProjector._store(
+                line_item,
+                est_key_2,
+                VerifiedNumber(
+                    value=round(float(have_1.value) * (1 + growth_rate), 2),
+                    is_estimate=True,
+                ),
+            )
         return line_item

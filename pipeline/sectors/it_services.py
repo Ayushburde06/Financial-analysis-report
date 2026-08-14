@@ -7,7 +7,9 @@ from .base import SectorConfig
 @dataclass
 class ITServicesConfig(SectorConfig):
     sector_name: str = "IT Services"
-    sector_aliases: List[str] = field(default_factory=lambda: ["it", "technology", "software", "tech"])
+    sector_aliases: List[str] = field(default_factory=lambda: [
+        "it services", "software services", "technology services",
+    ])
 
     revenue_keys: List[str] = field(default_factory=lambda: ["revenue", "total_income", "operating_revenue"])
     ebitda_keys:  List[str] = field(default_factory=lambda: ["ebitda", "operating_profit"])

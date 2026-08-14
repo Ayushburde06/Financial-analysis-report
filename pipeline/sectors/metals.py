@@ -9,8 +9,7 @@ class MetalsConfig(SectorConfig):
     sector_name: str = "Metals"
     sector_aliases: List[str] = field(default_factory=lambda: [
         "metals", "steel", "aluminium", "aluminum", "copper", "zinc",
-        "mining", "iron ore", "sponge iron", "tata steel", "jsw steel",
-        "hindalco", "vedanta", "coal india", "nmdc"
+        "mining", "iron ore", "sponge iron",
     ])
 
     revenue_keys: List[str] = field(default_factory=lambda: ["revenue", "net_sales", "total_income"])

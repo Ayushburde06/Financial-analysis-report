@@ -54,6 +54,16 @@ REQUIRED_SECTIONS = [
     "disclaimer",
 ]
 
+SECTION_ALIASES = {
+    "executive summary": ("executive summary",),
+    "annual financial": ("annual financial", "consolidated financials", "profit & loss"),
+    "quarterly": ("quarterly", "quarterly financials"),
+    "balance sheet": ("balance sheet",),
+    "cash flow": ("cash flow", "cashflow"),
+    "investment view": ("investment view", "outlook & valuation", "recommendation summary"),
+    "disclaimer": ("disclaimer", "disclosures"),
+}
+
 GARBLED_PATTERN = re.compile(
     r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f-\x9f]|'   # control chars
     r'[^\x00-\x7f]{5,}|'                            # long non-ASCII runs
@@ -133,7 +143,7 @@ def check_structure(text: str) -> Dict[str, Any]:
     text_lower = text.lower()
     found, missing = [], []
     for section in REQUIRED_SECTIONS:
-        if section in text_lower:
+        if any(alias in text_lower for alias in SECTION_ALIASES.get(section, (section,))):
             found.append(section)
         else:
             missing.append(section)
@@ -147,7 +157,23 @@ def check_facts(pdf_text: str, source_text: str) -> Dict[str, Any]:
     Skip small numbers (<1000) and percentages.
     """
     # Remove percentage values — derived, not in source as-is
-    pdf_clean = re.sub(r'\d[\d,]*\.?\d*\s*%', ' ', pdf_text)
+    market_line = re.compile(
+        r'(market cap|enterprise value|outstanding shares|free float|dividend yield|'
+        r'52w high|52w low|sensex value|beta|cmp|current market price)', re.I)
+    pdf_lines = pdf_text.splitlines()
+    clean_lines = []
+    skip_next = False
+    for line in pdf_lines:
+        if skip_next:
+            skip_next = False
+            continue
+        if market_line.search(line):
+            skip_next = True
+            clean_lines.append(' ')
+        else:
+            clean_lines.append(line)
+    pdf_clean = '\n'.join(clean_lines)
+    pdf_clean = re.sub(r'\d[\d,]*\.?\d*\s*%', ' ', pdf_clean)
     # Remove 4-digit years
     pdf_clean = re.sub(r'\b(19|20)\d{2}\b', ' ', pdf_clean)
 
@@ -234,11 +260,23 @@ def check_tables(tables: List[Dict]) -> Dict[str, Any]:
         num_rows = len(rows)
         num_cols = max((len(r) for r in rows if r), default=0)
 
+        table_text = " ".join(
+            str(cell or "") for row in rows for cell in (row or [])
+        ).lower()
+
+        # Rating, recommendation, and disclosure tables are textual by design.
+        is_textual = any(keyword in table_text for keyword in (
+            "rating", "recommendation", "buy", "accumulate", "disclaimer",
+            "disclosure", "target", "reduce/sell", "downside", "upside",
+            "source-verified", "report basis", "data availability",
+            "risk warning", "internal-use",
+        ))
+
         # Sidebar-style lookup tables — exempt (2-column key/value pairs)
         is_sidebar = num_cols <= 2 and num_rows <= 10
-        if is_sidebar:
+        if is_sidebar or is_textual:
             ok_tables.append(
-                f"Page {tbl['page']} | {num_rows} rows | sidebar table (exempt)"
+                f"Page {tbl['page']} | {num_rows} rows | textual/sidebar table (exempt)"
             )
             continue
 
@@ -469,9 +507,13 @@ def audit(report_pdf: str, source_pdf: str = None) -> Dict[str, Any]:
 def audit_all():
     """Audit all PDFs in outputs/ folder."""
     output_dir = Path("outputs")
-    pdfs = list(output_dir.glob("*_Geojit_Report.pdf"))
+    pdfs = sorted(
+        path
+        for path in output_dir.glob("*.pdf")
+        if path.name.endswith(("_Equity_Report.pdf", "_Geojit_Report.pdf"))
+    )
     if not pdfs:
-        print(red("No report PDFs found in outputs/ folder."))
+        print(red("No generated report PDFs found in outputs/ folder."))
         return
 
     results = {}

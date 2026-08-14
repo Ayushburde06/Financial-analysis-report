@@ -41,6 +41,27 @@ class UnitReport:
         }
 
 
+# Counts / ratios / per-share metrics must never be scaled million→crore.
+_NON_MONETARY_KEYS = {
+    "headcount", "employees", "employee_count", "eps", "diluted_eps",
+    "basic_eps", "book_value", "bvps", "nim", "gnpa", "nnpa", "pcr",
+    "casa_ratio", "roe", "roa", "roce", "capital_adequacy", "credit_growth",
+    "ebitda_margin", "pat_margin", "net_margin", "gross_margin", "pe", "pb",
+    "ev_ebitda", "beta", "dividend_yield", "free_float", "shares_outstanding",
+    "outstanding_shares", "face_value",
+}
+
+
+def is_non_monetary_metric(key: str) -> bool:
+    """True for counts, ratios, margins, and per-share fields."""
+    k = str(key or "").lower().split(".")[0]
+    if k in _NON_MONETARY_KEYS:
+        return True
+    return any(token in k for token in (
+        "margin", "ratio", "growth", "yield", "per_share", "headcount", "employee",
+    ))
+
+
 def _detect_unit(ocr_text: str) -> Tuple[str, float, list]:
     """
     Scan OCR text for unit indicators in financial table headers.
@@ -161,7 +182,7 @@ def normalize_units(raw_financials: Dict[str, Any], ocr_text: str) -> Tuple[Dict
         print(f"     [Unit Normalizer] Detected unit: {unit} — no conversion needed.")
         return raw_financials, report
 
-    # Apply conversion
+    # Apply conversion — never scale non-monetary metrics (counts, ratios, per-share).
     import copy
     corrected = copy.deepcopy(raw_financials)
 
@@ -190,7 +211,10 @@ def normalize_units(raw_financials: Dict[str, Any], ocr_text: str) -> Tuple[Dict
         return obj
 
     count = 0
-    corrected = _convert_obj(corrected)
+    for key, value in list(corrected.items()):
+        if is_non_monetary_metric(key):
+            continue
+        corrected[key] = _convert_obj(value)
     report.values_converted = count
     report.summary = (
         f"Source reports in '{unit}'. Converted {count} values to crores "

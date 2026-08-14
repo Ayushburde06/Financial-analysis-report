@@ -10,44 +10,13 @@ import io
 import re
 from typing import Optional
 
-# Ticker map — company name → NSE ticker (Yahoo format: TICKER.NS)
-_TICKER_MAP = {
-    "icici bank":                  "ICICIBANK.NS",
-    "icici":                       "ICICIBANK.NS",
-    "jsw energy":                  "JSWENERGY.NS",
-    "jsw energy limited":          "JSWENERGY.NS",
-    "l&t technology services":     "LTTS.NS",
-    "ltts":                        "LTTS.NS",
-    "l&t technology":              "LTTS.NS",
-    "pondy oxides":                "POCL.NS",
-    "pondy oxides and chemicals":  "POCL.NS",
-    "pocl":                        "POCL.NS",
-    "hdfc bank":                   "HDFCBANK.NS",
-    "tata motors":                 "TATAMOTORS.NS",
-    "infosys":                     "INFY.NS",
-    "tcs":                         "TCS.NS",
-    "wipro":                       "WIPRO.NS",
-    "reliance":                    "RELIANCE.NS",
-    "sbi":                         "SBIN.NS",
-    "state bank":                  "SBIN.NS",
-    "bajaj finance":               "BAJFINANCE.NS",
-    "maruti":                      "MARUTI.NS",
-    "asian paints":                "ASIANPAINT.NS",
-    "eternal":                     "ETERNAL.NS",
-    "zomato":                      "ZOMATO.NS",
-}
+from pipeline.utils.company_identity import resolve_ticker as _resolve_identity_ticker
 
 _SENSEX_TICKER = "^BSESN"
 
 
-def _resolve_ticker(company_name: str) -> Optional[str]:
-    key = company_name.lower().strip()
-    for name, ticker in _TICKER_MAP.items():
-        if name in key or key in name:
-            return ticker
-    # Guess: first word + .NS
-    first = re.sub(r"[^a-zA-Z]", "", key.split()[0]).upper()
-    return f"{first}.NS" if first else None
+def _resolve_ticker(company_name: str, source_filename: str = "") -> Optional[str]:
+    return _resolve_identity_ticker(company_name, source_filename)
 
 
 def _placeholder_chart(company_name: str) -> str:
@@ -72,7 +41,7 @@ def _placeholder_chart(company_name: str) -> str:
         return ""
 
 
-def fetch_price_performance(company_name: str) -> dict:
+def fetch_price_performance(company_name: str, source_filename: str = "") -> dict:
     """
     Compute 3M/6M/1Y absolute, Sensex, and relative returns.
     Returns {"3M": {"abs": x, "sensex": y, "rel": z}, "6M": {...}, "1Y": {...}}.
@@ -84,7 +53,7 @@ def fetch_price_performance(company_name: str) -> dict:
     except ImportError:
         return {}
 
-    ticker = _resolve_ticker(company_name)
+    ticker = _resolve_ticker(company_name, source_filename)
     if not ticker:
         return {}
 
@@ -141,7 +110,7 @@ def fetch_price_performance(company_name: str) -> dict:
     return perf
 
 
-def generate_price_chart(company_name: str) -> str:
+def generate_price_chart(company_name: str, source_filename: str = "") -> str:
     """
     Fetch 1Y stock price + Sensex rebased, return base64 PNG.
     Falls back to placeholder on any error.
@@ -157,7 +126,7 @@ def generate_price_chart(company_name: str) -> str:
         print(f"     [Stock Chart] Import error: {e}")
         return _placeholder_chart(company_name)
 
-    ticker = _resolve_ticker(company_name)
+    ticker = _resolve_ticker(company_name, source_filename)
     if not ticker:
         print(f"     [Stock Chart] No ticker for '{company_name}' — using placeholder.")
         return _placeholder_chart(company_name)
@@ -204,7 +173,7 @@ def generate_price_chart(company_name: str) -> str:
     # Plot
     fig, ax = plt.subplots(figsize=(4.2, 2.2))
     ax.plot(stock_rebased.index, stock_rebased.values,
-            color="#00837a", linewidth=1.5, label=ticker.replace(".NS", ""))
+            color="#123b68", linewidth=1.5, label=ticker.replace(".NS", ""))
     if sensex_rebased is not None:
         # Align to common dates
         common_idx = stock_rebased.index.intersection(sensex_rebased.index)
@@ -223,7 +192,7 @@ def generate_price_chart(company_name: str) -> str:
     plt.xticks(rotation=30, ha="right")
     ax.set_ylabel("Rebased (100)", fontsize=6, color="#555")
     ax.set_title(f"{company_name} vs Sensex (1Y)",
-                 fontsize=7.5, color="#00837a", pad=4)
+                 fontsize=7.5, color="#123b68", pad=4)
     ax.legend(fontsize=5.5, loc="upper left",
               framealpha=0.6, edgecolor="#cccccc")
     plt.tight_layout(pad=0.4)
@@ -252,7 +221,7 @@ def _classify_stock_type(market_cap_cr: Optional[float]) -> Optional[str]:
     return "Small Cap"
 
 
-def fetch_market_data(company_name: str) -> dict:
+def fetch_market_data(company_name: str, source_filename: str = "") -> dict:
     """
     Pull comprehensive factual market data from yfinance for Page 1 fields.
     Returns a dict with keys: cmp, market_cap_cr, enterprise_value_cr,
@@ -268,7 +237,7 @@ def fetch_market_data(company_name: str) -> dict:
     except ImportError:
         return {}
 
-    ticker_sym = _resolve_ticker(company_name)
+    ticker_sym = _resolve_ticker(company_name, source_filename)
     if not ticker_sym:
         return {}
 
@@ -407,6 +376,16 @@ def fetch_market_data(company_name: str) -> dict:
             out["avg_volume_6m"] = round(avg_vol / 1e5, 2)  # convert to lakhs
     except Exception:
         pass
+
+    # ── Industry / sector (yfinance ground-truth — overrides keyword guessing) ──
+    industry_val = info.get("industry") or info.get("industryDisp")
+    if industry_val:
+        out["industry"] = str(industry_val).strip()
+
+    # ── Business description (yfinance ground-truth — prevents generic LLM filler) ──
+    biz_desc = info.get("longBusinessDescription") or info.get("longName")
+    if biz_desc:
+        out["business_description"] = str(biz_desc).strip()
 
     # ── Stock type from market cap ──
     out["stock_type"] = _classify_stock_type(out.get("market_cap_cr"))

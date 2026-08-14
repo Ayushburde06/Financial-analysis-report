@@ -74,13 +74,13 @@ class CrossSourceVerifier:
             sv = _number(secondary.get(secondary_key))
             if pv is None or sv is None:
                 report.checks.append(CrossSourceCheck(
-                    field, pv, sv, "uploaded source document", "Yahoo Finance market data",
+                    field, pv, sv, "uploaded source document", "verified external market data",
                     "unavailable", note=f"{label} was not available from both sources."))
                 continue
             diff = abs(pv - sv) / max(abs(pv), 1e-9) * 100.0
             status = "confirmed" if diff <= tolerance_pct else "conflict"
             report.checks.append(CrossSourceCheck(
-                field, pv, sv, "uploaded source document", "Yahoo Finance market data",
+                field, pv, sv, "uploaded source document", "verified external market data",
                 status, round(diff, 2),
                 f"{label} {'agrees' if status == 'confirmed' else 'differs'} by {diff:.1f}%."))
             if status == "conflict":

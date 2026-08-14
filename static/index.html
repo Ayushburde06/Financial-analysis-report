@@ -91,11 +91,12 @@
 
           <form id="report-form" novalidate>
             <label class="field-label" for="company-name">
-              Company name <span>Optional</span>
+              Company name <span>Required</span>
             </label>
             <input id="company-name" name="company_name" type="text"
-                   placeholder="Auto-detect from document"
-                   autocomplete="organization">
+                   placeholder="e.g. ICICI Bank"
+                   autocomplete="organization"
+                   required minlength="2">
 
             <label class="field-label" for="context-doc">
               Financial document <span>Required</span>
