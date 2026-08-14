@@ -32,6 +32,25 @@ If the source does not contain a value, the report leaves it unavailable rather 
 
 Supported files: PDF, CSV, TXT, TEXT, and Markdown.
 
+### Example
+
+Input: `PDF/ICICI Q2FY26.pdf` for **ICICI Bank**
+
+Output: `outputs/ICICI Q2FY26_Equity_Report.pdf`
+
+### Quality safeguards
+
+- Financial values are checked against the uploaded document before use.
+- Python performs calculations such as growth, margins, and ratios.
+- Charts use verified numerical data only.
+- Missing values remain unavailable instead of being guessed.
+- Narrative explanations are based on verified facts and source evidence.
+
+```text
+Document -> OCR Markdown -> Hybrid RAG -> Structured JSON
+		 -> Verification and calculations -> Charts and narrative -> Final PDF
+```
+
 ## Run locally
 
 Create a virtual environment, install the dependencies, add the Azure credentials to `.env`, and start the API:
