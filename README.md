@@ -17,18 +17,22 @@ The live demo processes one report at a time and limits PDFs to 30 pages because
 
 ## How it works
 
-The pipeline is source-first:
+The pipeline is source-first: the uploaded document remains the authority, while Python and the LLM have clearly separated jobs.
 
-1. The document is read with Azure Document Intelligence, or directly for CSV and text files.
-2. Structured facts are extracted and checked against the source.
-3. Python calculates derived values such as growth and margins only when the inputs are verified.
-4. The verified data drives the tables, charts, and LLM-written explanations.
+1. **Read the source.** PDFs are converted into page-level text with Azure Document Intelligence. CSV and text files are read directly.
+2. **Understand the document.** The pipeline identifies the company, reporting periods, financial statements, KPIs, and relevant sections.
+3. **Extract facts.** The LLM organizes those facts into structured report fields, but the values are checked against the original text and stored with their evidence.
+4. **Verify and calculate.** Deterministic Python checks units, sanity, and consistency, then calculates values such as growth, margins, and ratios only from verified inputs.
+5. **Build the analysis.** Verified numbers feed the tables and charts. The LLM writes the highlights and outlook around those numbers instead of inventing new ones.
+6. **Render the report.** The final data is placed into the Geojit-style HTML template and rendered as a downloadable PDF.
 
-Missing information stays unavailable instead of being guessed. The app does not fetch market data automatically, so a missing CMP, target price, or rating remains unavailable.
+If the source does not contain a value, the report leaves it unavailable rather than guessing. The app does not fetch market data automatically, so a missing CMP, target price, or rating remains unavailable.
 
 Supported files: PDF, CSV, TXT, TEXT, and Markdown.
 
-## Run locally with Python
+## Run locally
+
+Create a virtual environment, install the dependencies, add the Azure credentials to `.env`, and start the API:
 
 ```bash
 python -m venv .venv
@@ -50,6 +54,14 @@ set PYTHONPATH=.
 python scripts/run_one.py "PDF/ICICI Q2FY26.pdf" "ICICI Bank"
 python scripts/run_one.py "PDF/LTTS Q2FY26.pdf" "LTTS"
 ```
+
+## Built with
+
+The application uses FastAPI and Uvicorn for the backend, Azure Document Intelligence for PDF reading, and Azure-hosted LLM APIs for structured extraction and narrative writing. Python handles verification and calculations; Matplotlib creates the charts; Jinja2, HTML/CSS, and Playwright produce the final PDF.
+
+## Report template and fields
+
+The report layout and sections are defined in [templates/geojit_report.html](templates/geojit_report.html), with styling in [templates/geojit_report.css](templates/geojit_report.css). Typed report fields live in [schema.py](schema.py), data is assembled in [pipeline/14_report_object_model/rom_builder.py](pipeline/14_report_object_model/rom_builder.py), and PDF rendering is handled by [pipeline/15_pdf_renderer/renderer.py](pipeline/15_pdf_renderer/renderer.py).
 
 ## Disclaimer
 
