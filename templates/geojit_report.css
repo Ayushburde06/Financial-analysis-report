@@ -430,6 +430,11 @@ table.data-table.compact td, table.data-table.compact th { padding: 2px 4px; }
   height: 0;
 }
 .full-page  { width: 100%; padding-top: 36px; }
+.page3-content { padding-top: 24px; }
+.page3-content .section-heading { margin-top: 5px; margin-bottom: 3px; }
+.page3-content table.data-table { margin-bottom: 4px; }
+.page3-content table.data-table td,
+.page3-content table.data-table th { padding-top: 2px; padding-bottom: 2px; }
 .disclaimer-body { page-break-inside: auto; break-inside: auto; }
 .page2-charts {
   page-break-inside: auto;

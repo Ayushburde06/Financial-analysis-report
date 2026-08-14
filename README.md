@@ -4,7 +4,7 @@ This app takes a company financial document and returns a downloadable, auto-fil
 
 Repository: [Financial-analysis-report](https://github.com/Ayushburde06/Financial-analysis-report)
 
-> **Live demo note:** The public demo runs on a cost-conscious AWS EC2 instance with 2 GB RAM. To keep the instance stable, it processes one report at a time and may take longer for large or scanned PDFs. A slow response or timeout reflects the live infrastructure limit, not an intentional reduction in verification: the same source-first pipeline can be run locally for full report-quality evaluation.
+> **Live demo note:** The public demo runs on a cost-conscious AWS EC2 instance with 2 GB RAM. To keep the instance stable, it processes one report at a time and accepts PDFs up to 30 pages. A slow response or timeout reflects the live infrastructure limit, not an intentional reduction in verification: the same source-first pipeline can be run locally for full report-quality evaluation.
 
 ## Assignment summary
 
@@ -116,11 +116,11 @@ docker compose ps
 docker compose logs --tail=100 web
 ```
 
-The Compose configuration is tuned for a 2 GB EC2 instance: one report at a time, two OCR workers, a 20 MB upload limit, and a 1.5 GB container memory limit. The health response should report `"status": "ok"` when the required Azure provider variables are configured. The EC2 security group should allow the application port only as needed; put the service behind HTTPS/reverse proxy infrastructure for a public deployment.
+The Compose configuration is tuned for a 2 GB EC2 instance: one report at a time, two OCR workers, a 50 MB upload limit, and a 1.5 GB container memory limit. PDF uploads are additionally limited to 30 pages in production. The health response should report `"status": "ok"` when the required Azure provider variables are configured. The EC2 security group should allow the application port only as needed; put the service behind HTTPS/reverse proxy infrastructure for a public deployment.
 
 ### Production quality note
 
-Use the same repository and commit locally when validating report quality, then deploy that tested commit to EC2. The EC2 free-tier resource limits can cause slower processing, timeouts, or container restarts; they should not be treated as a report-quality benchmark. Keep report generation single-file on EC2, and audit representative PDFs locally before promoting changes with `git pull origin main`.
+Use the same repository and commit locally when validating report quality, then deploy that tested commit to EC2. The EC2 free-tier resource limits can cause slower processing, timeouts, or container restarts; they should not be treated as a report-quality benchmark. Keep report generation single-file on EC2, and audit representative PDFs locally before promoting changes with `git pull origin main`. For production stability, keep multimodel extraction disabled on a 2 GB instance. Enabling both models may improve quality, but significantly increases memory usage and crash risk; the safer approach is to improve single-model extraction prompts and retry handling rather than re-enable parallel models.
 
 ## Run locally with Python
 
@@ -179,24 +179,12 @@ python scripts/run_one.py "PDF/LTTS Q2FY26.pdf" "LTTS"
 | No invented values | Missing fields remain `—` or unavailable |
 | One-click download | UI download action calls `GET /download/{filename}` |
 
-## Example reports
 
-Generated examples include:
-
-- [View ICICI Q2FY26 Equity Report](outputs/ICICI%20Q2FY26_Equity_Report.pdf) - source: `PDF/ICICI Q2FY26.pdf`
-- [View LTTS Q2FY26 Modern AI Report](outputs/LTTS_Q2FY26_Modern_AI_Report.pdf) - source: `PDF/LTTS Q2FY26.pdf`
-
-### Two additional reports
-
-These reports were generated from PDFs in the `PDF/` folder and are available to view directly:
-
-- [View JSW Energy Q2FY26 Equity Report](outputs/JSW%20Energy%20Q2FY26_Equity_Report.pdf) - source: `PDF/JSW Energy Q2FY26.pdf`
-- [View POCL Q2FY26 Equity Report](outputs/POCL%20Q2FY26_Equity_Report.pdf) - source: `PDF/POCL Q2FY26.pdf`
 
 ### Submission reports
 
-1. **ICICI Q2FY26**: [generated PDF](outputs/ICICI%20Q2FY26_Equity_Report.pdf) - source path: `PDF/ICICI Q2FY26.pdf`
-2. **JSW Energy Q2FY26**: [generated PDF](outputs/JSW%20Energy%20Q2FY26_Equity_Report.pdf) - source path: `PDF/JSW Energy Q2FY26.pdf`
+1. **ICICI Q2FY26**: [generated PDF](submission/reports/ICICI%20Q2FY26_Geojit_Report.pdf) - source path: `PDF/ICICI Q2FY26.pdf`
+2. **JSW Energy Q2FY26**: [generated PDF](submission/reports/JSW%20Energy%20Q2FY26_Geojit_Report.pdf) - source path: `PDF/JSW Energy Q2FY26.pdf`
 
 ## Disclaimer
 

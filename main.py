@@ -19,6 +19,7 @@ import time
 import logging
 import traceback
 from pathlib import Path
+import fitz
 from dom_schema import ParagraphNode, TableNode
 from fastapi import FastAPI, UploadFile, File, Form, Request
 from fastapi import HTTPException
@@ -152,6 +153,7 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 ALLOWED_UPLOAD_EXTENSIONS = {".pdf", ".csv", ".txt", ".text", ".md"}
 MAX_UPLOAD_BYTES = int(os.getenv("MAX_UPLOAD_MB", "50")) * 1024 * 1024
+MAX_LIVE_PDF_PAGES = int(os.getenv("MAX_LIVE_PDF_PAGES", "30"))
 
 
 @app.get("/favicon.ico", include_in_schema=False)
@@ -404,6 +406,20 @@ async def generate_report_endpoint(
         )
     if file_ext == ".pdf" and not file_bytes.startswith(b"%PDF"):
         raise HTTPException(status_code=422, detail="The uploaded file is not a valid PDF.")
+    if _is_production and file_ext == ".pdf":
+        try:
+            with fitz.open(stream=file_bytes, filetype="pdf") as uploaded_pdf:
+                page_count = uploaded_pdf.page_count
+        except Exception as exc:
+            raise HTTPException(status_code=422, detail="The uploaded file is not a readable PDF.") from exc
+        if page_count > MAX_LIVE_PDF_PAGES:
+            raise HTTPException(
+                status_code=413,
+                detail=(
+                    f"This live service accepts PDF files with at most "
+                    f"{MAX_LIVE_PDF_PAGES} pages. The uploaded file has {page_count} pages."
+                ),
+            )
     with open(pdf_path, "wb") as buffer:
         buffer.write(file_bytes)
 

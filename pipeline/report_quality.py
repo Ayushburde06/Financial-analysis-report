@@ -349,14 +349,9 @@ def check_pdf_file(pdf_path: str, expected_chart_count: int = 0) -> List[str]:
         if doc.page_count < 1:
             errors.append("PDF did not render: no pages")
             return errors
-        if doc.page_count > 6:
+        if doc.page_count != 4:
             errors.append(
-                f"PDF overflow: {doc.page_count} pages (Geojit frame is 4)"
-            )
-        elif doc.page_count != 4:
-            print(
-                f"     [Assignment checks] Page count is {doc.page_count}; "
-                "Geojit frame is 4."
+                f"PDF page count is {doc.page_count}; Geojit frame requires exactly 4 pages"
             )
         text = "\n".join(page.get_text("text") or "" for page in doc).strip()
         if len(text) < 80:
