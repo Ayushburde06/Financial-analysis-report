@@ -20,8 +20,8 @@ The live demo processes one report at a time and limits PDFs to 30 pages because
 The pipeline is source-first: the uploaded document remains the authority, while Python and the LLM have clearly separated jobs.
 
 1. **Read the source.** PDFs go through Azure Document Intelligence and become page-level Markdown. CSV and text files are read directly.
-2. **Find the structure.** The pipeline identifies the company, reporting periods, statements, KPIs, and useful evidence sections in that Markdown.
-3. **Create structured data.** The LLM organizes the facts into typed JSON report fields. Each important value keeps a reference to the source evidence behind it.
+2. **Retrieve the evidence.** A hybrid RAG layer searches the OCR Markdown and brings the most relevant statements, tables, and passages into each extraction task.
+3. **Create structured data.** The LLM organizes the retrieved facts into typed JSON report fields. Each important value keeps a reference to the source evidence behind it.
 4. **Verify and calculate.** Deterministic Python checks units, sanity, and consistency, then calculates growth, margins, and ratios only from verified inputs.
 5. **Build charts and analysis.** Tables and Matplotlib charts use verified numerical series. The LLM writes highlights and outlook around those numbers instead of inventing new ones.
 6. **Render the report.** The verified JSON is mapped into the Geojit-style HTML/CSS template and Playwright renders the final downloadable PDF.
@@ -35,6 +35,8 @@ Supported files: PDF, CSV, TXT, TEXT, and Markdown.
 ## Run locally
 
 Create a virtual environment, install the dependencies, add the Azure credentials to `.env`, and start the API:
+
+Local execution uses the same pipeline as the demo, but without the hosted CPU, memory, and 30-page limits. It reads the document, creates OCR Markdown, retrieves evidence with RAG, extracts structured JSON, verifies the evidence, calculates the metrics, builds charts, writes the narrative, and renders the PDF. Set `USE_MULTIMODEL=1` for the two-model path when the machine and API quota allow it; use `USE_MULTIMODEL=0` for a lighter single-model run.
 
 ```bash
 python -m venv .venv
