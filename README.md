@@ -15,6 +15,11 @@ The live demo processes one report at a time and limits PDFs to 30 pages because
 1. **ICICI Q2FY26**: [generated PDF](submission/reports/ICICI%20Q2FY26_Geojit_Report.pdf) - source path: `PDF/ICICI Q2FY26.pdf`
 2. **JSW Energy Q2FY26**: [generated PDF](submission/reports/JSW%20Energy%20Q2FY26_Geojit_Report.pdf) - source path: `PDF/JSW Energy Q2FY26.pdf`
 
+### Additional samples
+
+- **LTTS Q2FY26**: [generated PDF](submission/reports/LTTS%20Q2FY26_Geojit_Report.pdf) - source path: `PDF/LTTS Q2FY26.pdf`
+- **POCL Q2FY26**: [generated PDF](submission/reports/POCL%20Q2FY26_Geojit_Report.pdf) - source path: `PDF/POCL Q2FY26.pdf`
+
 ## How it works
 
 The pipeline is source-first: the uploaded document remains the authority, while Python and the LLM have clearly separated jobs.
