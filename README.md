@@ -19,12 +19,14 @@ The live demo processes one report at a time and limits PDFs to 30 pages because
 
 The pipeline is source-first: the uploaded document remains the authority, while Python and the LLM have clearly separated jobs.
 
-1. **Read the source.** PDFs are converted into page-level text with Azure Document Intelligence. CSV and text files are read directly.
-2. **Understand the document.** The pipeline identifies the company, reporting periods, financial statements, KPIs, and relevant sections.
-3. **Extract facts.** The LLM organizes those facts into structured report fields, but the values are checked against the original text and stored with their evidence.
-4. **Verify and calculate.** Deterministic Python checks units, sanity, and consistency, then calculates values such as growth, margins, and ratios only from verified inputs.
-5. **Build the analysis.** Verified numbers feed the tables and charts. The LLM writes the highlights and outlook around those numbers instead of inventing new ones.
-6. **Render the report.** The final data is placed into the Geojit-style HTML template and rendered as a downloadable PDF.
+1. **Read the source.** PDFs go through Azure Document Intelligence and become page-level Markdown. CSV and text files are read directly.
+2. **Find the structure.** The pipeline identifies the company, reporting periods, statements, KPIs, and useful evidence sections in that Markdown.
+3. **Create structured data.** The LLM organizes the facts into typed JSON report fields. Each important value keeps a reference to the source evidence behind it.
+4. **Verify and calculate.** Deterministic Python checks units, sanity, and consistency, then calculates growth, margins, and ratios only from verified inputs.
+5. **Build charts and analysis.** Tables and Matplotlib charts use verified numerical series. The LLM writes highlights and outlook around those numbers instead of inventing new ones.
+6. **Render the report.** The verified JSON is mapped into the Geojit-style HTML/CSS template and Playwright renders the final downloadable PDF.
+
+When `USE_MULTIMODEL=1`, GPT-5.6 Luna and DeepSeek V4 Pro run in parallel for extraction and narrative writing. Their results are combined or compared before the verified report is built. This can improve resilience and coverage, but it also uses more CPU, memory, and API quota, so the lighter single-model mode is better suited to a small hosted instance.
 
 If the source does not contain a value, the report leaves it unavailable rather than guessing. The app does not fetch market data automatically, so a missing CMP, target price, or rating remains unavailable.
 
