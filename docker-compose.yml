@@ -11,11 +11,16 @@ services:
     environment:
       ENVIRONMENT: production
       PORT: "8000"
+      GENERATION_MAX_CONCURRENT: "1"
+      OCR_MAX_WORKERS: "1"
     volumes:
       - ./uploads:/app/uploads
       - ./outputs:/app/outputs
       - ./tmp:/app/tmp
-    shm_size: "1gb"
+    mem_limit: 768m
+    mem_reservation: 512m
+    cpus: "1.0"
+    shm_size: "256mb"
     init: true
     restart: unless-stopped
     healthcheck:

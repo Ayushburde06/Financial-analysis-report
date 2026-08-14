@@ -5,6 +5,7 @@ now fully implementing the 14-Stage Institutional Pipeline.
 """
 import os
 import sys
+import asyncio
 
 # Force UTF-8 output on Windows to prevent CP1252 encoding errors with ₹ ✅ ❌ symbols
 if sys.platform == "win32":
@@ -86,7 +87,10 @@ async def unhandled_exception_handler(request: Request, exc: Exception):
 # The browser talks only to this server-side proxy. Provider keys stay in the
 # deployment environment and are never returned to the client.
 _rate_window_seconds = int(os.getenv("GENERATE_RATE_WINDOW_SECONDS", "600"))
-_generate_limit = int(os.getenv("GENERATE_RATE_LIMIT", "20"))
+_generate_limit = int(os.getenv("GENERATE_RATE_LIMIT", "3"))
+_generation_semaphore = asyncio.Semaphore(
+    max(1, int(os.getenv("GENERATION_MAX_CONCURRENT", "1")))
+)
 _generate_requests: dict[str, list[float]] = {}
 
 
@@ -111,7 +115,20 @@ async def security_middleware(request: Request, call_next):
         recent.append(now)
         _generate_requests[client_ip] = recent
 
-    response = await call_next(request)
+        if _generation_semaphore.locked():
+            return JSONResponse(
+                status_code=429,
+                content={"detail": "A report is already being generated. Please try again shortly."},
+                headers={"Retry-After": "30"},
+            )
+        await _generation_semaphore.acquire()
+        try:
+            response = await call_next(request)
+        finally:
+            _generation_semaphore.release()
+    else:
+        response = await call_next(request)
+
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["X-Frame-Options"] = "DENY"
     response.headers["Referrer-Policy"] = "no-referrer"
