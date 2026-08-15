@@ -21,7 +21,7 @@ import traceback
 from pathlib import Path
 import fitz
 from dom_schema import ParagraphNode, TableNode
-from fastapi import FastAPI, UploadFile, File, Form, Request
+from fastapi import FastAPI, UploadFile, File, Form, Request, BackgroundTasks
 from fastapi import HTTPException
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -93,6 +93,7 @@ _generation_semaphore = asyncio.Semaphore(
     max(1, int(os.getenv("GENERATION_MAX_CONCURRENT", "1")))
 )
 _generate_requests: dict[str, list[float]] = {}
+_jobs: dict[str, dict] = {}
 
 
 @app.middleware("http")
@@ -116,17 +117,7 @@ async def security_middleware(request: Request, call_next):
         recent.append(now)
         _generate_requests[client_ip] = recent
 
-        if _generation_semaphore.locked():
-            return JSONResponse(
-                status_code=429,
-                content={"detail": "A report is already being generated. Please try again shortly."},
-                headers={"Retry-After": "30"},
-            )
-        await _generation_semaphore.acquire()
-        try:
-            response = await call_next(request)
-        finally:
-            _generation_semaphore.release()
+        response = await call_next(request)
     else:
         response = await call_next(request)
 
@@ -163,6 +154,14 @@ async def favicon():
     if os.path.exists(favicon_path):
         return FileResponse(favicon_path, media_type="image/x-icon")
     raise HTTPException(status_code=404)
+
+@app.get("/status/{job_id}")
+async def get_status(job_id: str):
+    """Polling endpoint for the frontend to check report generation progress."""
+    job = _jobs.get(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found or expired.")
+    return job
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -368,6 +367,7 @@ async def _handle_non_pdf_route(
 
 @app.post("/generate-report")
 async def generate_report_endpoint(
+    background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     company_name: str = Form(default=""),
     cmp: str = Form(default=""),
@@ -375,6 +375,11 @@ async def generate_report_endpoint(
     market_cap: str = Form(default=""),
     sector_override: str = Form(default=""),
 ):
+    if _generation_semaphore.locked():
+        raise HTTPException(
+            status_code=429,
+            detail="A report is already being generated. Please wait for it to finish."
+        )
     file_id = str(uuid.uuid4())
     safe_filename = Path(file.filename or "report.pdf").name
     file_ext = Path(safe_filename).suffix.lower()
@@ -423,294 +428,326 @@ async def generate_report_endpoint(
     with open(pdf_path, "wb") as buffer:
         buffer.write(file_bytes)
 
-    print(f"\n--- Processing {file.filename} (14-Stage Architecture) ---")
-
-    # ── Non-PDF shortcut ──────────────────────────────────────────────────────
-    is_pdf = file_ext in (".pdf",)
-    if not is_pdf:
-        return await _handle_non_pdf_route(
-            file_bytes=file_bytes,
-            safe_filename=safe_filename,
-            file_ext=file_ext,
-            company_name=company_name,
-            cmp=cmp, target_price=target_price,
-            market_cap=market_cap,
-            sector_override=sector_override,
-            pdf_path=pdf_path,
-        )
-    print("[Stage 01] Financial Structure Builder...")
-    master_doc = stage_01.FinancialStructureBuilder.run(pdf_path)
+    job_id = file_id
+    _jobs[job_id] = {"status": "processing", "message": "Reading and validating document..."}
     
-    print("[Stage 02] Company Knowledge Builder...")
-    kg = stage_02.KnowledgeBuilder.run(master_doc, filename=safe_filename)
-    
-    print("[Stage 03] KPI Discovery Engine...")
-    kpis = stage_03.KPIDiscoveryEngine.run(kg, master_doc.get_full_text())
-    
-    print("[Stage 04] Coverage Analyzer...")
-    coverage = stage_04.CoverageAnalyzer.run(master_doc, kpis)
-    
-    print("[Stage 05] Industry Detection Engine...")
-    industry = stage_05.IndustryDetectionEngine.run(
-        kg, master_doc.get_full_text(), kpis=kpis
+    background_tasks.add_task(
+        _process_report_task,
+        job_id, file_bytes, safe_filename, file_ext, company_name, 
+        cmp, target_price, market_cap, sector_override, pdf_path, file.filename
     )
     
-    print("[Stage 06] Adaptive Analysis Planner...")
-    plan = stage_06.AdaptiveAnalysisPlanner.run(industry, coverage, kpis=kpis)
-    
-    print("[Stage 08] Hybrid Retrieval Engine...")
-    retriever = stage_08.HybridRetriever(plan, master_doc)
-    raw_financials = None
-    extraction_errors = []
-    # One initial extraction plus one targeted retry is enough after the
-    # financial-page batch extractor; repeating the entire document three
-    # times makes the assignment demo unnecessarily slow.
-    for attempt in range(1, 3):
-        try:
-            candidate = retriever.retrieve_financials(attempt=attempt)
-            quality_gate.ReportQualityGate.validate_raw_financials(candidate, sector=industry)
-            raw_financials = candidate
-            break
-        except ValueError as exc:
-            extraction_errors.append(f"Attempt {attempt}: {exc}")
-            print(f"     [Quality Gate] {extraction_errors[-1]}")
-    if raw_financials is None:
-        raise HTTPException(
-            status_code=422,
-            detail="Report not generated because verified extraction failed after 2 attempts: " + " | ".join(extraction_errors),
-        )
-
-    # Verify and canonicalize extracted values before any quantification. The
-    # evidence builder invokes the quant engine, so normalization must happen
-    # before that boundary rather than after the first evidence packet.
-    stage_12b = importlib.import_module("pipeline.12b_source_verifier.fact_checker")
-    ocr_text = master_doc.get_full_text() if master_doc else ""
-    fact_check_report = stage_12b.SourceFactChecker.verify(raw_financials, ocr_text)
-
-    if fact_check_report.unverified:
-        print(f"     [Pipeline] {len(fact_check_report.unverified)} unverified field(s) "
-              "— triggering extraction self-healer...")
-        raw_financials, fact_check_report = stage_12b.ExtractionSelfHealer.heal(
-            raw_financials, ocr_text, fact_check_report, sector=industry
-        )
-
-    stage_12d = importlib.import_module("pipeline.12d_unit_normalizer.unit_normalizer")
-    raw_financials, unit_report = stage_12d.normalize_units(raw_financials, ocr_text)
-    fact_check_report = stage_12b.SourceFactChecker.verify(
-        raw_financials,
-        ocr_text,
-        source_value_factor=unit_report.conversion_factor,
-    )
-    if fact_check_report.unverified:
-        for field in fact_check_report.unverified:
-            parts = field.field_path.split(".")
-            if len(parts) >= 2 and isinstance(raw_financials.get(parts[0]), dict):
-                raw_financials[parts[0]][parts[1]] = None
-        fact_check_report = stage_12b.SourceFactChecker.verify(
-            raw_financials,
-            ocr_text,
-            source_value_factor=unit_report.conversion_factor,
-        )
-    if fact_check_report.blocked:
-        raise HTTPException(
-            status_code=422,
-            detail=("Source verification failed after unit normalization: "
-                    f"{fact_check_report.verified_count}/{fact_check_report.total} "
-                    "values verified."),
-        )
-    
-    print("[Stage 09 & 10] Quant Engine & Evidence Builder...")
-    raw_stem = Path(safe_filename).stem
-    # Strip UUID prefix if present
-    clean_stem = re.sub(r'^[a-f0-9\-]{36}_?', '', raw_stem)
-    # Priority: 1) explicit form field, 2) Stage 02 OCR extraction, 3) filename
-    # Guard: if company_name is a Pydantic FieldInfo object (leak), treat as empty
-    _cn_raw = str(company_name).strip() if company_name else ""
-    company_name_str = "" if ("annotation=" in _cn_raw or "FieldInfo" in _cn_raw
-                              or "required=" in _cn_raw) else _cn_raw
-
-    # Generic-name detector: if the OCR-extracted name is just a legal suffix or
-    # a single generic word (e.g. "India Ltd", "Energy Limited"), it's almost
-    # certainly a mis-extraction — fall back to the filename stem instead.
-    _GENERIC_NAME_TOKENS = {
-        "india", "ltd", "limited", "energy", "corporation", "corp",
-        "company", "co", "pvt", "private", "holdings", "holding",
-        "enterprises", "enterprise", "group", "industries", "industry",
-    }
-    def _is_generic_name(name: str) -> bool:
-        tokens = re.sub(r'[^a-zA-Z\s]', '', name.lower()).split()
-        tokens = [t for t in tokens if t]
-        if not tokens:
-            return True
-        # Generic if every token is a generic word
-        return all(t in _GENERIC_NAME_TOKENS for t in tokens)
-
-    def _clean_company_label(name: str) -> str:
-        """Remove OCR logo/slogan fragments from the display company name."""
-        if not name:
-            return ""
-        lines = [re.sub(r"\s+", " ", line).strip() for line in str(name).splitlines()]
-        lines = [line for line in lines if line and len(line) > 2]
-        # OCR often appends a logo slogan or repeated single-letter marks after
-        # the actual company heading. The first meaningful line is the safest.
-        return lines[0] if lines else ""
-
-    filename_fallback = clean_stem.replace("_", " ").split(" Q2")[0].split(" Q1")[0].split(" Q3")[0].split(" Q4")[0].strip()
-
-    if company_name_str and not _is_generic_name(company_name_str):
-        derived_name = _clean_company_label(company_name_str)
-    elif kg.get("company_name") and kg["company_name"] not in ("Unknown Company", "", None):
-        _kg_name = str(kg["company_name"])
-        _kg_clean = "" if ("annotation=" in _kg_name or "FieldInfo" in _kg_name) else _kg_name
-        _kg_clean = _clean_company_label(_kg_clean)
-        if _kg_clean and not _is_generic_name(_kg_clean):
-            derived_name = _kg_clean
-        else:
-            derived_name = filename_fallback
-    else:
-        derived_name = ""
-    if not derived_name:
-        derived_name = filename_fallback
-    if not derived_name:
-        derived_name = "Unknown Company"
-    from pipeline.utils.company_identity import canonicalize_display_name
-    derived_name = canonicalize_display_name(derived_name, safe_filename)
-    print(f"     [Pipeline] Company name resolved: {derived_name}")
-    fa_evidence = stage_10.EvidenceBuilder.build_financial_evidence(
-        raw_financials,
-        company_name=derived_name,
-        industry=industry,
-        extra_keys=kpis,
-    )
-    
-    stage_12 = importlib.import_module("pipeline.12_verification_pipeline.verifier")
-
-    print("[Stage 11] Unified Analyst (GPT-5.6 Luna)...")
-    filename_stem = Path(safe_filename).stem
-    period_match_re = re.search(r"Q[1-4]\s*FY\s*\d{2,4}", filename_stem, re.IGNORECASE)
-    report_period = period_match_re.group(0).replace(" ", "").upper() if period_match_re else ""
-    fa_evidence = stage_10.attach_filing_context(
-        fa_evidence,
-        industry=industry,
-        knowledge=kg,
-        period_label=report_period,
-    )
-    stage_11 = importlib.import_module("pipeline.11_specialist_agents.financial_analyst")
-    fa_agent = stage_11.FinancialAnalyst()
-    fa_narrative_raw = fa_agent.generate(fa_evidence)
-
-    print("[Stage 12] Verification Pipeline...")
-    is_valid, fa_narrative = stage_12.VerificationStack.layer3_claim_verifier(
-        fa_narrative_raw, fa_evidence
-    )
-    if not is_valid:
-        raise HTTPException(
-            status_code=422,
-            detail="Narrative failed claim verification; PDF generation stopped.",
-        )
-
-    print("[Stage 08b] Valuation & Shareholding Extractor...")
-    stage_08b = importlib.import_module("pipeline.08b_valuation_extractor.extractor")
-    # Get per-page texts for 100% coverage extraction
-    page_texts_08b = None
-    if master_doc and master_doc.sections:
-        page_texts_08b = []
-        for section in master_doc.sections:
-            pt = ""
-            for node in section.nodes:
-                if isinstance(node, ParagraphNode):
-                    pt += node.text + "\n"
-                elif isinstance(node, TableNode):
-                    pt += node.csv_string + "\n"
-            page_texts_08b.append(pt.strip() if pt.strip() else "")
-    valuation_data = stage_08b.ValuationExtractor.run(ocr_text, page_texts=page_texts_08b)
-
-    print("[Stage 14] Report Object Model (ROM)...")
-    if not report_period:
-        filename_stem = Path(safe_filename).stem
-        period_match_re = re.search(r"Q[1-4]\s*FY\s*\d{2,4}", filename_stem, re.IGNORECASE)
-        report_period = period_match_re.group(0).replace(" ", "").upper() if period_match_re else "Generated report"
-    if report_period == "":
-        report_period = "Generated report"
-
-    pipe_runner = importlib.import_module("pipeline.pipeline_stage11_to_14")
-    report_data = pipe_runner.run(
-        fa_evidence=fa_evidence,
-        fa_narrative_raw=fa_narrative,
-        stage_12=stage_12,
-        stage_08b_valuation_data=valuation_data,
-        kg=kg,
-        industry=industry,
-        derived_name=derived_name,
-        report_period=report_period,
-        safe_filename=safe_filename,
-        file_filename=getattr(file, "filename", None) or pdf_path,
-        fact_check_report=fact_check_report,
-        ocr_text=ocr_text,
-        raw_financials=raw_financials,
-        source_value_factor=unit_report.conversion_factor,
-    )
+    return {"status": "accepted", "job_id": job_id}
 
 
+async def _process_report_task(
+    job_id: str, file_bytes: bytes, safe_filename: str, file_ext: str, 
+    company_name: str, cmp: str, target_price: str, market_cap: str, 
+    sector_override: str, pdf_path: str, original_filename: str
+):
     try:
-        quality_gate.ReportQualityGate.validate_report(
-            report_data, ocr_text=ocr_text, source_filename=safe_filename
-        )
-    except ValueError as exc:
-        raise HTTPException(status_code=422, detail=f"Assignment checks failed: {exc}") from exc
-
-    # ── Final Verification Gate ──────────────────────────────────────────────
-    # Summarize all verification stages before generating the PDF.
-    _fc_score = getattr(fact_check_report, 'score', 0)
-    _fc_verified = getattr(fact_check_report, 'verified_count', 0)
-    _fc_total = getattr(fact_check_report, 'total', 0)
-    _sanity = report_data.appendix.get('sanity_check', {}) if isinstance(
-        getattr(report_data, 'appendix', None), dict) else {}
-    if not isinstance(_sanity, dict):
-        _sanity = {}
-    _sanity_passed = _sanity.get('passed', True)
-    _sanity_absurd = _sanity.get('absurd', 0)
-
-    print("=" * 70)
-    print("  VERIFICATION GATE SUMMARY")
-    print("=" * 70)
-    print(f"  Stage 12b (Source Fact-Check):  {_fc_verified}/{_fc_total} values "
-          f"verified ({_fc_score:.0%})")
-    print(f"  Stage 12c (Sanity Check):       "
-          f"{'PASSED' if _sanity_passed else f'{_sanity_absurd} corrected'}")
-    print(f"  Stage 12d (Unit Normalizer):    "
-          f"Unit: {unit_report.detected_unit}, "
-          f"Factor: {unit_report.conversion_factor}, "
-          f"Converted: {unit_report.values_converted}")
-    print(f"  Stage 12  (Claim Verifier):     {'PASSED' if is_valid else 'FALLBACK'}")
-    print("=" * 70)
-    if _fc_score < 0.5:
-        print("  ⚠️  WARNING: Source verification below 50% — report flagged.")
-    if not _sanity_passed:
-        print("  ⚠️  NOTE: Some computed ratios were outside sensible ranges")
-        print("          and have been nullified (shown as — in the report).")
-    print("  ✅ Proceeding to PDF generation.")
-    print("=" * 70)
-
-    print("[Stage 15] PDF Renderer (Source-Verified Equity Research Report)...")
-    stage_15 = importlib.import_module("pipeline.15_pdf_renderer.renderer")
-    output_filename = f"{filename_stem}_Equity_Report.pdf"
-    try:
-        output_path = await stage_15.PDFRenderer.render_pdf(
-            report_data,
-            os.path.join(OUTPUT_DIR, output_filename),
-            template_name="geojit_report.html"
-        )
-    except ValueError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+        async with _generation_semaphore:
+            print(f"\n--- Processing {original_filename} (14-Stage Architecture) ---")
+        
+            # ── Non-PDF shortcut ──────────────────────────────────────────────────────
+            is_pdf = file_ext in (".pdf",)
+            if not is_pdf:
+                res = await _handle_non_pdf_route(
+                    file_bytes=file_bytes,
+                    safe_filename=safe_filename,
+                    file_ext=file_ext,
+                    company_name=company_name,
+                    cmp=cmp, target_price=target_price,
+                    market_cap=market_cap,
+                    sector_override=sector_override,
+                    pdf_path=pdf_path,
+                )
+                _jobs[job_id] = {
+                    "status": "completed",
+                    "pdf_path": res["pdf_path"],
+                    "pdf_filename": res["pdf_filename"],
+                    "message": res["message"],
+                    "recommendation": res.get("recommendation", "")
+                }
+                return
+            print("[Stage 01] Financial Structure Builder...")
+            master_doc = stage_01.FinancialStructureBuilder.run(pdf_path)
     
-    return {
-        "status": "success",
-        "message": "Orchestration completed through 15-Stage Pipeline.",
-        "pdf_path": output_path,
-        "pdf_filename": output_filename,
-        "recommendation": report_data.recommendation.action,
-    }
+            print("[Stage 02] Company Knowledge Builder...")
+            kg = stage_02.KnowledgeBuilder.run(master_doc, filename=safe_filename)
+    
+            print("[Stage 03] KPI Discovery Engine...")
+            kpis = stage_03.KPIDiscoveryEngine.run(kg, master_doc.get_full_text())
+    
+            print("[Stage 04] Coverage Analyzer...")
+            coverage = stage_04.CoverageAnalyzer.run(master_doc, kpis)
+    
+            print("[Stage 05] Industry Detection Engine...")
+            industry = stage_05.IndustryDetectionEngine.run(
+                kg, master_doc.get_full_text(), kpis=kpis
+            )
+    
+            print("[Stage 06] Adaptive Analysis Planner...")
+            plan = stage_06.AdaptiveAnalysisPlanner.run(industry, coverage, kpis=kpis)
+    
+            print("[Stage 08] Hybrid Retrieval Engine...")
+            retriever = stage_08.HybridRetriever(plan, master_doc)
+            raw_financials = None
+            extraction_errors = []
+            # One initial extraction plus one targeted retry is enough after the
+            # financial-page batch extractor; repeating the entire document three
+            # times makes the assignment demo unnecessarily slow.
+            for attempt in range(1, 3):
+                try:
+                    candidate = retriever.retrieve_financials(attempt=attempt)
+                    quality_gate.ReportQualityGate.validate_raw_financials(candidate, sector=industry)
+                    raw_financials = candidate
+                    break
+                except ValueError as exc:
+                    extraction_errors.append(f"Attempt {attempt}: {exc}")
+                    print(f"     [Quality Gate] {extraction_errors[-1]}")
+            if raw_financials is None:
+                raise HTTPException(
+                    status_code=422,
+                    detail="Report not generated because verified extraction failed after 2 attempts: " + " | ".join(extraction_errors),
+                )
+
+            # Verify and canonicalize extracted values before any quantification. The
+            # evidence builder invokes the quant engine, so normalization must happen
+            # before that boundary rather than after the first evidence packet.
+            stage_12b = importlib.import_module("pipeline.12b_source_verifier.fact_checker")
+            ocr_text = master_doc.get_full_text() if master_doc else ""
+            fact_check_report = stage_12b.SourceFactChecker.verify(raw_financials, ocr_text)
+
+            if fact_check_report.unverified:
+                print(f"     [Pipeline] {len(fact_check_report.unverified)} unverified field(s) "
+                      "— triggering extraction self-healer...")
+                raw_financials, fact_check_report = stage_12b.ExtractionSelfHealer.heal(
+                    raw_financials, ocr_text, fact_check_report, sector=industry
+                )
+
+            stage_12d = importlib.import_module("pipeline.12d_unit_normalizer.unit_normalizer")
+            raw_financials, unit_report = stage_12d.normalize_units(raw_financials, ocr_text)
+            fact_check_report = stage_12b.SourceFactChecker.verify(
+                raw_financials,
+                ocr_text,
+                source_value_factor=unit_report.conversion_factor,
+            )
+            if fact_check_report.unverified:
+                for field in fact_check_report.unverified:
+                    parts = field.field_path.split(".")
+                    if len(parts) >= 2 and isinstance(raw_financials.get(parts[0]), dict):
+                        raw_financials[parts[0]][parts[1]] = None
+                fact_check_report = stage_12b.SourceFactChecker.verify(
+                    raw_financials,
+                    ocr_text,
+                    source_value_factor=unit_report.conversion_factor,
+                )
+            if fact_check_report.blocked:
+                raise HTTPException(
+                    status_code=422,
+                    detail=("Source verification failed after unit normalization: "
+                            f"{fact_check_report.verified_count}/{fact_check_report.total} "
+                            "values verified."),
+                )
+    
+            print("[Stage 09 & 10] Quant Engine & Evidence Builder...")
+            raw_stem = Path(safe_filename).stem
+            # Strip UUID prefix if present
+            clean_stem = re.sub(r'^[a-f0-9\-]{36}_?', '', raw_stem)
+            # Priority: 1) explicit form field, 2) Stage 02 OCR extraction, 3) filename
+            # Guard: if company_name is a Pydantic FieldInfo object (leak), treat as empty
+            _cn_raw = str(company_name).strip() if company_name else ""
+            company_name_str = "" if ("annotation=" in _cn_raw or "FieldInfo" in _cn_raw
+                                      or "required=" in _cn_raw) else _cn_raw
+
+            # Generic-name detector: if the OCR-extracted name is just a legal suffix or
+            # a single generic word (e.g. "India Ltd", "Energy Limited"), it's almost
+            # certainly a mis-extraction — fall back to the filename stem instead.
+            _GENERIC_NAME_TOKENS = {
+                "india", "ltd", "limited", "energy", "corporation", "corp",
+                "company", "co", "pvt", "private", "holdings", "holding",
+                "enterprises", "enterprise", "group", "industries", "industry",
+            }
+            def _is_generic_name(name: str) -> bool:
+                tokens = re.sub(r'[^a-zA-Z\s]', '', name.lower()).split()
+                tokens = [t for t in tokens if t]
+                if not tokens:
+                    return True
+                # Generic if every token is a generic word
+                return all(t in _GENERIC_NAME_TOKENS for t in tokens)
+
+            def _clean_company_label(name: str) -> str:
+                """Remove OCR logo/slogan fragments from the display company name."""
+                if not name:
+                    return ""
+                lines = [re.sub(r"\s+", " ", line).strip() for line in str(name).splitlines()]
+                lines = [line for line in lines if line and len(line) > 2]
+                # OCR often appends a logo slogan or repeated single-letter marks after
+                # the actual company heading. The first meaningful line is the safest.
+                return lines[0] if lines else ""
+
+            filename_fallback = clean_stem.replace("_", " ").split(" Q2")[0].split(" Q1")[0].split(" Q3")[0].split(" Q4")[0].strip()
+
+            if company_name_str and not _is_generic_name(company_name_str):
+                derived_name = _clean_company_label(company_name_str)
+            elif kg.get("company_name") and kg["company_name"] not in ("Unknown Company", "", None):
+                _kg_name = str(kg["company_name"])
+                _kg_clean = "" if ("annotation=" in _kg_name or "FieldInfo" in _kg_name) else _kg_name
+                _kg_clean = _clean_company_label(_kg_clean)
+                if _kg_clean and not _is_generic_name(_kg_clean):
+                    derived_name = _kg_clean
+                else:
+                    derived_name = filename_fallback
+            else:
+                derived_name = ""
+            if not derived_name:
+                derived_name = filename_fallback
+            if not derived_name:
+                derived_name = "Unknown Company"
+            from pipeline.utils.company_identity import canonicalize_display_name
+            derived_name = canonicalize_display_name(derived_name, safe_filename)
+            print(f"     [Pipeline] Company name resolved: {derived_name}")
+            fa_evidence = stage_10.EvidenceBuilder.build_financial_evidence(
+                raw_financials,
+                company_name=derived_name,
+                industry=industry,
+                extra_keys=kpis,
+            )
+    
+            stage_12 = importlib.import_module("pipeline.12_verification_pipeline.verifier")
+
+            print("[Stage 11] Unified Analyst (GPT-5.6 Luna)...")
+            filename_stem = Path(safe_filename).stem
+            period_match_re = re.search(r"Q[1-4]\s*FY\s*\d{2,4}", filename_stem, re.IGNORECASE)
+            report_period = period_match_re.group(0).replace(" ", "").upper() if period_match_re else ""
+            fa_evidence = stage_10.attach_filing_context(
+                fa_evidence,
+                industry=industry,
+                knowledge=kg,
+                period_label=report_period,
+            )
+            stage_11 = importlib.import_module("pipeline.11_specialist_agents.financial_analyst")
+            fa_agent = stage_11.FinancialAnalyst()
+            fa_narrative_raw = fa_agent.generate(fa_evidence)
+
+            print("[Stage 12] Verification Pipeline...")
+            is_valid, fa_narrative = stage_12.VerificationStack.layer3_claim_verifier(
+                fa_narrative_raw, fa_evidence
+            )
+            if not is_valid:
+                raise HTTPException(
+                    status_code=422,
+                    detail="Narrative failed claim verification; PDF generation stopped.",
+                )
+
+            print("[Stage 08b] Valuation & Shareholding Extractor...")
+            stage_08b = importlib.import_module("pipeline.08b_valuation_extractor.extractor")
+            # Get per-page texts for 100% coverage extraction
+            page_texts_08b = None
+            if master_doc and master_doc.sections:
+                page_texts_08b = []
+                for section in master_doc.sections:
+                    pt = ""
+                    for node in section.nodes:
+                        if isinstance(node, ParagraphNode):
+                            pt += node.text + "\n"
+                        elif isinstance(node, TableNode):
+                            pt += node.csv_string + "\n"
+                    page_texts_08b.append(pt.strip() if pt.strip() else "")
+            valuation_data = stage_08b.ValuationExtractor.run(ocr_text, page_texts=page_texts_08b)
+
+            print("[Stage 14] Report Object Model (ROM)...")
+            if not report_period:
+                filename_stem = Path(safe_filename).stem
+                period_match_re = re.search(r"Q[1-4]\s*FY\s*\d{2,4}", filename_stem, re.IGNORECASE)
+                report_period = period_match_re.group(0).replace(" ", "").upper() if period_match_re else "Generated report"
+            if report_period == "":
+                report_period = "Generated report"
+
+            pipe_runner = importlib.import_module("pipeline.pipeline_stage11_to_14")
+            report_data = pipe_runner.run(
+                fa_evidence=fa_evidence,
+                fa_narrative_raw=fa_narrative,
+                stage_12=stage_12,
+                stage_08b_valuation_data=valuation_data,
+                kg=kg,
+                industry=industry,
+                derived_name=derived_name,
+                report_period=report_period,
+                safe_filename=safe_filename,
+                file_filename=getattr(file, "filename", None) or pdf_path,
+                fact_check_report=fact_check_report,
+                ocr_text=ocr_text,
+                raw_financials=raw_financials,
+                source_value_factor=unit_report.conversion_factor,
+            )
+
+
+            try:
+                quality_gate.ReportQualityGate.validate_report(
+                    report_data, ocr_text=ocr_text, source_filename=safe_filename
+                )
+            except ValueError as exc:
+                raise HTTPException(status_code=422, detail=f"Assignment checks failed: {exc}") from exc
+
+            # ── Final Verification Gate ──────────────────────────────────────────────
+            # Summarize all verification stages before generating the PDF.
+            _fc_score = getattr(fact_check_report, 'score', 0)
+            _fc_verified = getattr(fact_check_report, 'verified_count', 0)
+            _fc_total = getattr(fact_check_report, 'total', 0)
+            _sanity = report_data.appendix.get('sanity_check', {}) if isinstance(
+                getattr(report_data, 'appendix', None), dict) else {}
+            if not isinstance(_sanity, dict):
+                _sanity = {}
+            _sanity_passed = _sanity.get('passed', True)
+            _sanity_absurd = _sanity.get('absurd', 0)
+
+            print("=" * 70)
+            print("  VERIFICATION GATE SUMMARY")
+            print("=" * 70)
+            print(f"  Stage 12b (Source Fact-Check):  {_fc_verified}/{_fc_total} values "
+                  f"verified ({_fc_score:.0%})")
+            print(f"  Stage 12c (Sanity Check):       "
+                  f"{'PASSED' if _sanity_passed else f'{_sanity_absurd} corrected'}")
+            print(f"  Stage 12d (Unit Normalizer):    "
+                  f"Unit: {unit_report.detected_unit}, "
+                  f"Factor: {unit_report.conversion_factor}, "
+                  f"Converted: {unit_report.values_converted}")
+            print(f"  Stage 12  (Claim Verifier):     {'PASSED' if is_valid else 'FALLBACK'}")
+            print("=" * 70)
+            if _fc_score < 0.5:
+                print("  ⚠️  WARNING: Source verification below 50% — report flagged.")
+            if not _sanity_passed:
+                print("  ⚠️  NOTE: Some computed ratios were outside sensible ranges")
+                print("          and have been nullified (shown as — in the report).")
+            print("  ✅ Proceeding to PDF generation.")
+            print("=" * 70)
+
+            print("[Stage 15] PDF Renderer (Source-Verified Equity Research Report)...")
+            stage_15 = importlib.import_module("pipeline.15_pdf_renderer.renderer")
+            output_filename = f"{filename_stem}_Equity_Report.pdf"
+            try:
+                output_path = await stage_15.PDFRenderer.render_pdf(
+                    report_data,
+                    os.path.join(OUTPUT_DIR, output_filename),
+                    template_name="geojit_report.html"
+                )
+            except ValueError as exc:
+                raise HTTPException(status_code=422, detail=str(exc)) from exc
+    
+            _jobs[job_id] = {
+                "status": "completed",
+                "pdf_path": output_path,
+                "pdf_filename": output_filename,
+                "message": "Orchestration completed through 15-Stage Pipeline.",
+                "recommendation": report_data.recommendation.action,
+            }
+
+    except Exception as exc:
+        import traceback
+        traceback.print_exc()
+        _jobs[job_id] = {"status": "failed", "detail": str(exc)}
 
 if __name__ == "__main__":
     uvicorn.run("main:app", host="0.0.0.0", port=int(os.getenv("PORT", "8000")), reload=False)

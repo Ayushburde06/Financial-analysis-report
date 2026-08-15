@@ -113,8 +113,41 @@
         const reference = payload.request_id ? ` Reference: ${payload.request_id}` : '';
         throw new Error(`${detailText(payload, response.status)}${reference}`);
       }
-      finishProgress();
-      setTimeout(() => { progress.hidden = true; result.hidden = false; const filename = payload.pdf_filename || 'Equity_Research_Report.pdf'; download.href = `/download/${encodeURIComponent(filename)}`; download.download = filename; resultDetail.textContent = `${payload.message || 'The report passed the final source and layout checks.'}`; }, 350);
+      
+      const jobId = payload.job_id;
+      if (!jobId) throw new Error('Invalid server response: No job ID returned.');
+      
+      // Poll every 3 seconds
+      const pollTimer = setInterval(async () => {
+        try {
+          const statusRes = await fetch(`/status/${jobId}`);
+          if (!statusRes.ok) throw new Error(`Status check failed (${statusRes.status})`);
+          const statusPayload = await statusRes.json();
+          
+          if (statusPayload.status === 'failed') {
+            clearInterval(pollTimer);
+            throw new Error(statusPayload.detail || 'Report generation failed.');
+          } else if (statusPayload.status === 'completed') {
+            clearInterval(pollTimer);
+            finishProgress();
+            setTimeout(() => { 
+              progress.hidden = true; result.hidden = false; 
+              const filename = statusPayload.pdf_filename || 'Equity_Research_Report.pdf'; 
+              download.href = `/download/${encodeURIComponent(filename)}`; 
+              download.download = filename; 
+              resultDetail.textContent = `${statusPayload.message || 'The report passed the final source and layout checks.'}`; 
+            }, 350);
+          }
+        } catch (pollErr) {
+          clearInterval(pollTimer);
+          clearInterval(timer);
+          progress.hidden = true;
+          form.hidden = false;
+          generateButton.disabled = false;
+          showError(pollErr.message || 'Connection lost while checking status.');
+        }
+      }, 3000);
+      
     } catch (err) {
       clearInterval(timer);
       progress.hidden = true;
