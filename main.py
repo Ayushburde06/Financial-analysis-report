@@ -676,7 +676,7 @@ async def _process_report_task(
                 derived_name=derived_name,
                 report_period=report_period,
                 safe_filename=safe_filename,
-                file_filename=getattr(file, "filename", None) or pdf_path,
+                file_filename=safe_filename or pdf_path,
                 fact_check_report=fact_check_report,
                 ocr_text=ocr_text,
                 raw_financials=raw_financials,
