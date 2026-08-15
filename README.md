@@ -8,7 +8,7 @@ Repository: [Financial-analysis-report](https://github.com/Ayushburde06/Financia
 
 [Open the live application](https://financial-analysis-report.vercel.app/)
 
-The live demo processes one report at a time and limits PDFs to 30 pages because OCR, analysis, and PDF rendering use significant CPU and memory. Large or scanned PDFs may take longer, time out, or produce a less complete run under resource pressure. For the most reliable report-quality evaluation, clone the repository and run the pipeline locally.
+The live demo processes one report at a time and limits PDFs to 70 pages because OCR, analysis, and PDF rendering use significant CPU and memory. Large or scanned PDFs may take longer, time out, or produce a less complete run under resource pressure. For the most reliable report-quality evaluation, clone the repository and run the pipeline locally.
 
 ### Submission reports
 
@@ -60,7 +60,7 @@ Document -> OCR Markdown -> Hybrid RAG -> Structured JSON
 
 Create a virtual environment, install the dependencies, add the Azure credentials to `.env`, and start the API:
 
-Local execution uses the same pipeline as the demo, but without the hosted CPU, memory, and 30-page limits. It reads the document, creates OCR Markdown, retrieves evidence with RAG, extracts structured JSON, verifies the evidence, calculates the metrics, builds charts, writes the narrative, and renders the PDF. Set `USE_MULTIMODEL=1` for the two-model path when the machine and API quota allow it; use `USE_MULTIMODEL=0` for a lighter single-model run.
+Local execution uses the same pipeline as the demo, but without the hosted CPU, memory, and 70-page limits. It reads the document, creates OCR Markdown, retrieves evidence with RAG, extracts structured JSON, verifies the evidence, calculates the metrics, builds charts, writes the narrative, and renders the PDF. Set `USE_MULTIMODEL=1` for the two-model path when the machine and API quota allow it; use `USE_MULTIMODEL=0` for a lighter single-model run.
 
 ```bash
 python -m venv .venv

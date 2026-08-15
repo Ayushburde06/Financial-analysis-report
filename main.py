@@ -144,7 +144,7 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 ALLOWED_UPLOAD_EXTENSIONS = {".pdf", ".csv", ".txt", ".text", ".md"}
 MAX_UPLOAD_BYTES = int(os.getenv("MAX_UPLOAD_MB", "50")) * 1024 * 1024
-MAX_LIVE_PDF_PAGES = int(os.getenv("MAX_LIVE_PDF_PAGES", "30"))
+MAX_LIVE_PDF_PAGES = int(os.getenv("MAX_LIVE_PDF_PAGES", "70"))
 
 
 @app.get("/favicon.ico", include_in_schema=False)
